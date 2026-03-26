@@ -50,7 +50,8 @@ namespace ShibaHomeJam.Core
         public void RecalculatePath()
         {
             if (!Alive || Arrived || animating) return;
-            moveTimer = moveInterval; // reset timer so the next auto-step is a full interval away
+            Debug.Log("Shiba: path recalculated after obstacle move");
+            moveTimer = moveInterval;
             TryStep();
         }
 

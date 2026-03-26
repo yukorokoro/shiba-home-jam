@@ -7,9 +7,7 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 5, "y": 5 },
       "obstacles": [
-        { "x": 2, "y": 0, "obstacleType": "movable" },
-        { "x": 0, "y": 2, "obstacleType": "fixed" },
-        { "x": 3, "y": 3, "obstacleType": "fixed" }
+        { "x": 2, "y": 2, "obstacleType": "movable" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 5, "y": 0 } }
@@ -22,12 +20,10 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 5, "y": 5 },
       "obstacles": [
-        { "x": 2, "y": 0, "obstacleType": "movable" },
-        { "x": 2, "y": 2, "obstacleType": "movable" },
-        { "x": 0, "y": 2, "obstacleType": "fixed" },
-        { "x": 1, "y": 2, "obstacleType": "fixed" },
-        { "x": 3, "y": 3, "obstacleType": "fixed" },
-        { "x": 4, "y": 4, "obstacleType": "movable" }
+        { "x": 2, "y": 1, "obstacleType": "movable" },
+        { "x": 3, "y": 3, "obstacleType": "movable" },
+        { "x": 1, "y": 3, "obstacleType": "fixed" },
+        { "x": 4, "y": 1, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 5, "y": 0 } },
@@ -41,12 +37,11 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 6, "y": 6 },
       "obstacles": [
-        { "x": 2, "y": 1, "obstacleType": "movable" },
-        { "x": 4, "y": 3, "obstacleType": "movable" },
-        { "x": 0, "y": 3, "obstacleType": "fixed" },
+        { "x": 2, "y": 2, "obstacleType": "movable" },
+        { "x": 4, "y": 4, "obstacleType": "movable" },
+        { "x": 3, "y": 1, "obstacleType": "fixed" },
         { "x": 1, "y": 3, "obstacleType": "fixed" },
-        { "x": 5, "y": 1, "obstacleType": "fixed" },
-        { "x": 3, "y": 5, "obstacleType": "fixed" }
+        { "x": 5, "y": 3, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 6, "y": 0 } },
@@ -60,14 +55,12 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 6, "y": 6 },
       "obstacles": [
-        { "x": 2, "y": 0, "obstacleType": "movable" },
+        { "x": 2, "y": 1, "obstacleType": "movable" },
         { "x": 3, "y": 3, "obstacleType": "movable" },
-        { "x": 5, "y": 5, "obstacleType": "movable" },
-        { "x": 0, "y": 2, "obstacleType": "fixed" },
+        { "x": 5, "y": 4, "obstacleType": "movable" },
         { "x": 1, "y": 2, "obstacleType": "fixed" },
-        { "x": 4, "y": 1, "obstacleType": "fixed" },
-        { "x": 2, "y": 4, "obstacleType": "fixed" },
-        { "x": 6, "y": 3, "obstacleType": "fixed" }
+        { "x": 4, "y": 2, "obstacleType": "fixed" },
+        { "x": 2, "y": 5, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 6, "y": 0 } },
@@ -81,15 +74,13 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 7, "y": 7 },
       "obstacles": [
-        { "x": 2, "y": 1, "obstacleType": "movable" },
+        { "x": 2, "y": 2, "obstacleType": "movable" },
         { "x": 4, "y": 3, "obstacleType": "movable" },
         { "x": 6, "y": 5, "obstacleType": "movable" },
-        { "x": 0, "y": 3, "obstacleType": "fixed" },
-        { "x": 1, "y": 3, "obstacleType": "fixed" },
         { "x": 3, "y": 1, "obstacleType": "fixed" },
-        { "x": 5, "y": 5, "obstacleType": "fixed" },
-        { "x": 2, "y": 6, "obstacleType": "fixed" },
-        { "x": 7, "y": 3, "obstacleType": "fixed" }
+        { "x": 1, "y": 4, "obstacleType": "fixed" },
+        { "x": 5, "y": 2, "obstacleType": "fixed" },
+        { "x": 3, "y": 6, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 7, "y": 0 } },

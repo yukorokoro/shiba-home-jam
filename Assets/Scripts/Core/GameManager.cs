@@ -71,20 +71,32 @@ namespace ShibaHomeJam.Core
             Shiba.OnReachedHome += () => SetState(GameState.Clear);
             Shiba.OnCaught += () => SetState(GameState.GameOver);
 
-            // Movable obstacle at (2,0) — blocks Shiba's direct path right
-            SpawnObstacle(2, 0, true);
+            // Movable box at (2,2)
+            SpawnObstacle(2, 2, true);
 
-            // Fixed trees — narrow the route but don't block all paths
-            SpawnObstacle(0, 2, false);
-            SpawnObstacle(3, 3, false);
+            // No fixed obstacles in Level 1
 
-            // Enemy at (5,0)
+            // Enemy at (5,0) — faster than Shiba, creates urgency
             SpawnEnemy(5, 0);
 
             FitCamera(cols, rows);
             SetState(GameState.Playing);
 
-            Debug.Log("Level 1 loaded. Shiba(0,0) Home(5,5) Enemy(5,0). Slide the box!");
+            // Verify pathfinding at start
+            var gm = GridManager.Instance;
+            var path = gm.FindPath(0, 0, HomeCol, HomeRow);
+            if (path != null)
+            {
+                var steps = new System.Text.StringBuilder("Shiba start path: ");
+                foreach (var p in path) steps.Append($"({p.x},{p.y})→");
+                Debug.Log(steps.ToString().TrimEnd('→'));
+            }
+            else
+            {
+                Debug.Log("Shiba: path blocked at start, waiting for player");
+            }
+
+            Debug.Log("Level 1: Shiba(0,0) Home(5,5) Box(2,2) Enemy(5,0). Slide box to block enemy!");
         }
 
         // ===================== Input =====================

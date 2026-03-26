@@ -16,7 +16,7 @@ namespace ShibaHomeJam.Core
 
         public event Action OnCaughtShiba;
 
-        private float moveInterval = 1.5f;
+        private float moveInterval = 1.8f;
         private float moveTimer;
         private float animSpeed = 5f;
 
@@ -78,7 +78,17 @@ namespace ShibaHomeJam.Core
                 }
             }
 
-            if (bestCol == Col && bestRow == Row) return; // stuck
+            if (bestCol == Col && bestRow == Row)
+            {
+                // Log which obstacles are blocking
+                foreach (var d in dirs)
+                {
+                    int nc = Col + d.x, nr = Row + d.y;
+                    if (gm.InBounds(nc, nr) && gm.Get(nc, nr) == CellType.Obstacle)
+                        Debug.Log($"Enemy blocked by obstacle at ({nc},{nr})");
+                }
+                return;
+            }
 
             gm.Clear(Col, Row);
             Col = bestCol;
