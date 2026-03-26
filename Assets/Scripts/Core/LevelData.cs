@@ -31,11 +31,6 @@ namespace ShibaHomeJam.Core
     {
         public string type; // "cat" or "thief"
         public Position position;
-
-        public EnemyType ToEnemyType()
-        {
-            return type == "thief" ? EnemyType.Thief : EnemyType.Cat;
-        }
     }
 
     [Serializable]
