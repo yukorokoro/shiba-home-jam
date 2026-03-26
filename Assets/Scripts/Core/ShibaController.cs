@@ -1,13 +1,10 @@
 using UnityEngine;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace ShibaHomeJam.Core
 {
-    /// <summary>
-    /// Shiba auto-moves toward Home every moveInterval seconds via BFS shortest path.
-    /// The player does NOT control Shiba.
-    /// </summary>
     public class ShibaController : MonoBehaviour
     {
         public int Col { get; private set; }
@@ -29,14 +26,14 @@ namespace ShibaHomeJam.Core
             Row = row;
             Alive = true;
             Arrived = false;
-            moveTimer = moveInterval; // first move after full interval
+            moveTimer = moveInterval;
             transform.position = GridManager.Instance.ToWorld(col, row);
             GridManager.Instance.Set(col, row, CellType.Shiba);
         }
 
         private void Update()
         {
-            if (!Alive || Arrived) return;
+            if (!Alive || Arrived || animating) return;
 
             moveTimer -= Time.deltaTime;
             if (moveTimer <= 0f)
@@ -46,19 +43,35 @@ namespace ShibaHomeJam.Core
             }
         }
 
+        /// <summary>
+        /// Called by GameManager after an obstacle moves.
+        /// Immediately recalculates path and takes one step if possible.
+        /// </summary>
+        public void RecalculatePath()
+        {
+            if (!Alive || Arrived || animating) return;
+            moveTimer = moveInterval; // reset timer so the next auto-step is a full interval away
+            TryStep();
+        }
+
         private void TryStep()
         {
             var gm = GridManager.Instance;
-            var home = GameManager.Instance.HomeCol;
-            var homeR = GameManager.Instance.HomeRow;
+            int homeC = GameManager.Instance.HomeCol;
+            int homeR = GameManager.Instance.HomeRow;
 
-            var path = gm.FindPath(Col, Row, home, homeR);
-            if (path == null || path.Count == 0) return; // no path, wait
+            var path = gm.FindPath(Col, Row, homeC, homeR);
+
+            if (path == null || path.Count == 0)
+            {
+                Debug.Log("Shiba: path blocked, waiting");
+                return;
+            }
 
             var next = path[0];
             int nc = next.x, nr = next.y;
 
-            // Check if enemy is there → caught
+            // Check if enemy is on the next cell
             if (gm.Get(nc, nr) == CellType.Enemy)
             {
                 Die();
@@ -69,8 +82,9 @@ namespace ShibaHomeJam.Core
             Col = nc;
             Row = nr;
 
-            // Check if we reached Home
-            if (Col == home && Row == homeR)
+            Debug.Log($"Shiba: path found, moving to ({Col},{Row})");
+
+            if (Col == homeC && Row == homeR)
             {
                 Arrived = true;
                 Debug.Log("LEVEL CLEAR");
@@ -81,7 +95,6 @@ namespace ShibaHomeJam.Core
                 gm.Set(Col, Row, CellType.Shiba);
             }
 
-            Debug.Log($"Shiba moved to ({Col},{Row})");
             StartCoroutine(AnimateTo(gm.ToWorld(Col, Row)));
         }
 

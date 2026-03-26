@@ -1,18 +1,17 @@
 using UnityEngine;
+using System;
 using System.Collections;
 
 namespace ShibaHomeJam.Core
 {
-    /// <summary>
-    /// The ONLY thing the player controls.
-    /// Player clicks/taps an obstacle, then swipes a direction → it slides
-    /// in that direction until hitting a wall or another non-empty cell.
-    /// </summary>
     public class ObstacleController : MonoBehaviour
     {
         public int Col { get; private set; }
         public int Row { get; private set; }
         public bool Sliding { get; private set; }
+
+        /// <summary>Fired after the slide animation finishes.</summary>
+        public event Action OnSlideComplete;
 
         private float slideSpeed = 12f;
 
@@ -24,9 +23,6 @@ namespace ShibaHomeJam.Core
             GridManager.Instance.Set(col, row, CellType.Obstacle);
         }
 
-        /// <summary>
-        /// Slide in direction (dc, dr) until blocked. Returns true if it moved at all.
-        /// </summary>
         public bool TrySlide(int dc, int dr)
         {
             if (Sliding) return false;
@@ -34,7 +30,6 @@ namespace ShibaHomeJam.Core
             var gm = GridManager.Instance;
             int destCol = Col, destRow = Row;
 
-            // Slide until hitting something
             while (true)
             {
                 int nc = destCol + dc, nr = destRow + dr;
@@ -44,14 +39,14 @@ namespace ShibaHomeJam.Core
                 destRow = nr;
             }
 
-            if (destCol == Col && destRow == Row) return false; // didn't move
+            if (destCol == Col && destRow == Row) return false;
 
             gm.Clear(Col, Row);
             Col = destCol;
             Row = destRow;
             gm.Set(Col, Row, CellType.Obstacle);
 
-            Debug.Log($"Obstacle slid to ({Col},{Row})");
+            Debug.Log($"Obstacle moved to ({Col},{Row})");
             StartCoroutine(AnimateTo(gm.ToWorld(Col, Row)));
             return true;
         }
@@ -66,6 +61,7 @@ namespace ShibaHomeJam.Core
             }
             transform.position = target;
             Sliding = false;
+            OnSlideComplete?.Invoke();
         }
     }
 }

@@ -129,7 +129,7 @@ namespace ShibaHomeJam.Core
 
                     if (dc != 0 || dr != 0)
                     {
-                        selectedObs.TrySlide(dc, dr);
+                        SlideObstacle(selectedObs, dc, dr);
                     }
                 }
                 selectedObs = null;
@@ -163,11 +163,30 @@ namespace ShibaHomeJam.Core
                         }
 
                         if (dc != 0 || dr != 0)
-                            selectedObs.TrySlide(dc, dr);
+                            SlideObstacle(selectedObs, dc, dr);
                     }
                     selectedObs = null;
                 }
             }
+        }
+
+        private void SlideObstacle(ObstacleController obs, int dc, int dr)
+        {
+            if (obs.TrySlide(dc, dr))
+            {
+                // After slide animation finishes, tell Shiba to recalculate
+                obs.OnSlideComplete += OnObstacleSlideComplete;
+            }
+        }
+
+        private void OnObstacleSlideComplete()
+        {
+            // Unsubscribe from all obstacles to avoid double-fire
+            foreach (var obs in obstacles)
+                obs.OnSlideComplete -= OnObstacleSlideComplete;
+
+            if (Shiba != null && Shiba.Alive && !Shiba.Arrived)
+                Shiba.RecalculatePath();
         }
 
         private ObstacleController Raycast(Vector2 screenPos)
