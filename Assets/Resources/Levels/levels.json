@@ -7,21 +7,18 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 5, "y": 5 },
       "obstacles": [
-        { "x": 2, "y": 0 },
-        { "x": 2, "y": 1 },
-        { "x": 0, "y": 2 },
-        { "x": 1, "y": 2 },
-        { "x": 2, "y": 2 },
-        { "x": 3, "y": 3 },
-        { "x": 4, "y": 3 },
-        { "x": 5, "y": 3 },
-        { "x": 3, "y": 4 },
-        { "x": 3, "y": 5 }
+        { "x": 2, "y": 0, "obstacleType": "fixed" },
+        { "x": 2, "y": 1, "obstacleType": "movable" },
+        { "x": 0, "y": 2, "obstacleType": "fixed" },
+        { "x": 1, "y": 2, "obstacleType": "fixed" },
+        { "x": 2, "y": 2, "obstacleType": "fixed" },
+        { "x": 3, "y": 3, "obstacleType": "fixed" },
+        { "x": 4, "y": 3, "obstacleType": "movable" },
+        { "x": 5, "y": 3, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 5, "y": 0 } }
-      ],
-      "turnLimit": 0
+      ]
     },
     {
       "level": 2,
@@ -30,24 +27,23 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 5, "y": 5 },
       "obstacles": [
-        { "x": 1, "y": 0 },
-        { "x": 1, "y": 1 },
-        { "x": 1, "y": 2 },
-        { "x": 1, "y": 3 },
-        { "x": 3, "y": 2 },
-        { "x": 3, "y": 3 },
-        { "x": 3, "y": 4 },
-        { "x": 3, "y": 5 },
-        { "x": 5, "y": 1 },
-        { "x": 5, "y": 2 },
-        { "x": 5, "y": 3 },
-        { "x": 5, "y": 4 }
+        { "x": 1, "y": 0, "obstacleType": "fixed" },
+        { "x": 1, "y": 1, "obstacleType": "fixed" },
+        { "x": 1, "y": 2, "obstacleType": "movable" },
+        { "x": 1, "y": 3, "obstacleType": "fixed" },
+        { "x": 3, "y": 2, "obstacleType": "fixed" },
+        { "x": 3, "y": 3, "obstacleType": "movable" },
+        { "x": 3, "y": 4, "obstacleType": "fixed" },
+        { "x": 3, "y": 5, "obstacleType": "fixed" },
+        { "x": 5, "y": 1, "obstacleType": "fixed" },
+        { "x": 5, "y": 2, "obstacleType": "movable" },
+        { "x": 5, "y": 3, "obstacleType": "fixed" },
+        { "x": 5, "y": 4, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 5, "y": 0 } },
         { "type": "cat", "position": { "x": 0, "y": 5 } }
-      ],
-      "turnLimit": 0
+      ]
     },
     {
       "level": 3,
@@ -56,23 +52,22 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 6, "y": 6 },
       "obstacles": [
-        { "x": 2, "y": 0 },
-        { "x": 2, "y": 1 },
-        { "x": 2, "y": 2 },
-        { "x": 0, "y": 2 },
-        { "x": 1, "y": 2 },
-        { "x": 4, "y": 3 },
-        { "x": 4, "y": 4 },
-        { "x": 4, "y": 5 },
-        { "x": 4, "y": 6 },
-        { "x": 5, "y": 3 },
-        { "x": 6, "y": 3 }
+        { "x": 2, "y": 0, "obstacleType": "fixed" },
+        { "x": 2, "y": 1, "obstacleType": "movable" },
+        { "x": 2, "y": 2, "obstacleType": "fixed" },
+        { "x": 0, "y": 2, "obstacleType": "fixed" },
+        { "x": 1, "y": 2, "obstacleType": "fixed" },
+        { "x": 4, "y": 3, "obstacleType": "fixed" },
+        { "x": 4, "y": 4, "obstacleType": "movable" },
+        { "x": 4, "y": 5, "obstacleType": "fixed" },
+        { "x": 4, "y": 6, "obstacleType": "fixed" },
+        { "x": 5, "y": 3, "obstacleType": "fixed" },
+        { "x": 6, "y": 3, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 6, "y": 0 } },
         { "type": "cat", "position": { "x": 0, "y": 6 } }
-      ],
-      "turnLimit": 0
+      ]
     },
     {
       "level": 4,
@@ -81,24 +76,22 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 6, "y": 6 },
       "obstacles": [
-        { "x": 2, "y": 0 },
-        { "x": 2, "y": 1 },
-        { "x": 0, "y": 2 },
-        { "x": 1, "y": 2 },
-        { "x": 2, "y": 2 },
-        { "x": 3, "y": 3 },
-        { "x": 3, "y": 4 },
-        { "x": 4, "y": 3 },
-        { "x": 5, "y": 4 },
-        { "x": 5, "y": 5 },
-        { "x": 5, "y": 6 },
-        { "x": 6, "y": 4 }
+        { "x": 2, "y": 0, "obstacleType": "fixed" },
+        { "x": 2, "y": 1, "obstacleType": "movable" },
+        { "x": 0, "y": 2, "obstacleType": "fixed" },
+        { "x": 1, "y": 2, "obstacleType": "fixed" },
+        { "x": 2, "y": 2, "obstacleType": "fixed" },
+        { "x": 4, "y": 3, "obstacleType": "fixed" },
+        { "x": 4, "y": 4, "obstacleType": "movable" },
+        { "x": 5, "y": 4, "obstacleType": "fixed" },
+        { "x": 5, "y": 5, "obstacleType": "movable" },
+        { "x": 5, "y": 6, "obstacleType": "fixed" },
+        { "x": 6, "y": 4, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 6, "y": 0 } },
-        { "type": "thief", "position": { "x": 3, "y": 6 } }
-      ],
-      "turnLimit": 0
+        { "type": "cat", "position": { "x": 3, "y": 6 } }
+      ]
     },
     {
       "level": 5,
@@ -107,27 +100,26 @@
       "shiba": { "x": 0, "y": 0 },
       "goal": { "x": 7, "y": 7 },
       "obstacles": [
-        { "x": 2, "y": 0 },
-        { "x": 2, "y": 1 },
-        { "x": 2, "y": 2 },
-        { "x": 0, "y": 2 },
-        { "x": 1, "y": 2 },
-        { "x": 4, "y": 2 },
-        { "x": 4, "y": 3 },
-        { "x": 4, "y": 4 },
-        { "x": 3, "y": 4 },
-        { "x": 5, "y": 5 },
-        { "x": 5, "y": 6 },
-        { "x": 5, "y": 7 },
-        { "x": 6, "y": 5 },
-        { "x": 7, "y": 5 }
+        { "x": 2, "y": 0, "obstacleType": "fixed" },
+        { "x": 2, "y": 1, "obstacleType": "movable" },
+        { "x": 2, "y": 2, "obstacleType": "fixed" },
+        { "x": 0, "y": 2, "obstacleType": "fixed" },
+        { "x": 1, "y": 2, "obstacleType": "fixed" },
+        { "x": 4, "y": 2, "obstacleType": "fixed" },
+        { "x": 4, "y": 3, "obstacleType": "movable" },
+        { "x": 4, "y": 4, "obstacleType": "fixed" },
+        { "x": 3, "y": 4, "obstacleType": "fixed" },
+        { "x": 5, "y": 5, "obstacleType": "fixed" },
+        { "x": 5, "y": 6, "obstacleType": "movable" },
+        { "x": 5, "y": 7, "obstacleType": "fixed" },
+        { "x": 6, "y": 5, "obstacleType": "fixed" },
+        { "x": 7, "y": 5, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 7, "y": 0 } },
         { "type": "cat", "position": { "x": 0, "y": 7 } },
-        { "type": "thief", "position": { "x": 7, "y": 4 } }
-      ],
-      "turnLimit": 0
+        { "type": "cat", "position": { "x": 7, "y": 4 } }
+      ]
     }
   ]
 }

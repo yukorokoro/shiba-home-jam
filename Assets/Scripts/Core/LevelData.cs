@@ -1,6 +1,5 @@
 using UnityEngine;
 using System;
-using System.Collections.Generic;
 
 namespace ShibaHomeJam.Core
 {
@@ -12,9 +11,8 @@ namespace ShibaHomeJam.Core
         public int height;
         public Position shiba;
         public Position goal;
-        public Position[] obstacles;
+        public ObstacleData[] obstacles;
         public EnemyData[] enemies;
-        public int turnLimit;
     }
 
     [Serializable]
@@ -22,14 +20,22 @@ namespace ShibaHomeJam.Core
     {
         public int x;
         public int y;
+    }
 
-        public Vector2Int ToVector2Int() => new Vector2Int(x, y);
+    [Serializable]
+    public class ObstacleData
+    {
+        public int x;
+        public int y;
+        public string obstacleType; // "movable" or "fixed"
+
+        public bool IsMovable => obstacleType == "movable";
     }
 
     [Serializable]
     public class EnemyData
     {
-        public string type; // "cat" or "thief"
+        public string type;
         public Position position;
     }
 

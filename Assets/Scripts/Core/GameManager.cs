@@ -76,19 +76,17 @@ namespace ShibaHomeJam.Core
             Shiba.OnReachedHome += () => SetState(GameState.Clear);
             Shiba.OnCaught += () => SetState(GameState.GameOver);
 
-            // Wall 1: L-shape trapping Shiba in top-left 2x2
-            SpawnObstacle(2, 0);
-            SpawnObstacle(2, 1);
-            SpawnObstacle(0, 2);
-            SpawnObstacle(1, 2);
-            SpawnObstacle(2, 2);
+            // Wall 1: traps Shiba in top-left — fixed trees + 1 movable box
+            SpawnObstacle(2, 0, false); // fixed tree
+            SpawnObstacle(2, 1, true);  // movable box ← player slides this
+            SpawnObstacle(0, 2, false); // fixed tree
+            SpawnObstacle(1, 2, false); // fixed tree
+            SpawnObstacle(2, 2, false); // fixed tree
 
-            // Wall 2: L-shape blocking access to Home zone
-            SpawnObstacle(3, 3);
-            SpawnObstacle(4, 3);
-            SpawnObstacle(5, 3);
-            SpawnObstacle(3, 4);
-            SpawnObstacle(3, 5);
+            // Wall 2: blocks access to Home — fixed trees + 1 movable box
+            SpawnObstacle(3, 3, false); // fixed tree
+            SpawnObstacle(4, 3, true);  // movable box ← slides up to also block enemy
+            SpawnObstacle(5, 3, false); // fixed tree
 
             // Enemy at (5,0) — fast (1.5s), threatens from top-right
             SpawnEnemy(5, 0);
@@ -97,7 +95,7 @@ namespace ShibaHomeJam.Core
             FitCamera(cols, rows);
 
             SetState(GameState.Playing);
-            Debug.Log("Level 1 loaded. Must move 2+ obstacles to clear path.");
+            Debug.Log("Level 1 loaded. Slide 2 boxes to clear path. Boxes can also block enemy.");
         }
 
         // ===================== Input =====================
@@ -204,7 +202,10 @@ namespace ShibaHomeJam.Core
             if (cam == null) return null;
             var ray = cam.ScreenPointToRay(screenPos);
             if (Physics.Raycast(ray, out var hit, 100f))
-                return hit.collider.GetComponent<ObstacleController>();
+            {
+                var oc = hit.collider.GetComponent<ObstacleController>();
+                if (oc != null && oc.IsMovable) return oc;
+            }
             return null;
         }
 
@@ -247,17 +248,33 @@ namespace ShibaHomeJam.Core
             return sc;
         }
 
-        private void SpawnObstacle(int col, int row)
+        private void SpawnObstacle(int col, int row, bool movable)
         {
-            var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            obj.name = $"Obstacle({col},{row})";
-            obj.transform.localScale = Vector3.one * 0.85f;
-            obj.GetComponent<Renderer>().material.color = new Color(0.55f, 0.55f, 0.55f); // gray
-            // Keep BoxCollider for raycast!
-            var oc = obj.AddComponent<ObstacleController>();
-            oc.Init(col, row);
-            obstacles.Add(oc);
-            allSpawned.Add(obj);
+            if (movable)
+            {
+                // Movable box: gray cube, keeps BoxCollider for raycast
+                var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                obj.name = $"Box({col},{row})";
+                obj.transform.localScale = Vector3.one * 0.8f;
+                obj.GetComponent<Renderer>().material.color = new Color(0.6f, 0.55f, 0.4f); // tan/wood
+                var oc = obj.AddComponent<ObstacleController>();
+                oc.Init(col, row, true);
+                obstacles.Add(oc);
+                allSpawned.Add(obj);
+            }
+            else
+            {
+                // Fixed tree: green cylinder, no collider (can't interact)
+                var obj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                obj.name = $"Tree({col},{row})";
+                obj.transform.localScale = new Vector3(0.7f, 0.5f, 0.7f);
+                obj.GetComponent<Renderer>().material.color = new Color(0.2f, 0.5f, 0.15f); // dark green
+                Destroy(obj.GetComponent<Collider>()); // no raycast on fixed
+                var oc = obj.AddComponent<ObstacleController>();
+                oc.Init(col, row, false);
+                obstacles.Add(oc);
+                allSpawned.Add(obj);
+            }
         }
 
         private void SpawnEnemy(int col, int row)

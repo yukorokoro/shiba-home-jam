@@ -9,22 +9,24 @@ namespace ShibaHomeJam.Core
         public int Col { get; private set; }
         public int Row { get; private set; }
         public bool Sliding { get; private set; }
+        public bool IsMovable { get; private set; }
 
-        /// <summary>Fired after the slide animation finishes.</summary>
         public event Action OnSlideComplete;
 
         private float slideSpeed = 12f;
 
-        public void Init(int col, int row)
+        public void Init(int col, int row, bool movable)
         {
             Col = col;
             Row = row;
+            IsMovable = movable;
             transform.position = GridManager.Instance.ToWorld(col, row);
             GridManager.Instance.Set(col, row, CellType.Obstacle);
         }
 
         public bool TrySlide(int dc, int dr)
         {
+            if (!IsMovable) return false;
             if (Sliding) return false;
 
             var gm = GridManager.Instance;
