@@ -11,10 +11,6 @@ namespace ShibaHomeJam.Core
         GameOver
     }
 
-    /// <summary>
-    /// Owns the game loop: spawns level, handles input, game state.
-    /// Level data is hardcoded for now (Level 1).
-    /// </summary>
     public class GameManager : MonoBehaviour
     {
         public static GameManager Instance { get; private set; }
@@ -33,7 +29,7 @@ namespace ShibaHomeJam.Core
         // Input state
         private ObstacleController selectedObs;
         private Vector2 pointerStart;
-        private bool dragging;
+        private bool pointerDown;
 
         private void Awake()
         {
@@ -58,7 +54,6 @@ namespace ShibaHomeJam.Core
         {
             ClearAll();
 
-            // Level 1: 6x6
             int cols = 6, rows = 6;
             GridManager.Instance.Init(cols, rows);
 
@@ -68,7 +63,7 @@ namespace ShibaHomeJam.Core
             GridManager.Instance.Set(HomeCol, HomeRow, CellType.Home);
             SpawnHome(HomeCol, HomeRow);
 
-            // Floor tiles
+            // Floor
             SpawnFloor(cols, rows);
 
             // Shiba at (0,0)
@@ -76,137 +71,119 @@ namespace ShibaHomeJam.Core
             Shiba.OnReachedHome += () => SetState(GameState.Clear);
             Shiba.OnCaught += () => SetState(GameState.GameOver);
 
-            // Wall 1: traps Shiba in top-left — fixed trees + 1 movable box
-            SpawnObstacle(2, 0, false); // fixed tree
-            SpawnObstacle(2, 1, true);  // movable box ← player slides this
-            SpawnObstacle(0, 2, false); // fixed tree
-            SpawnObstacle(1, 2, false); // fixed tree
-            SpawnObstacle(2, 2, false); // fixed tree
+            // Movable obstacle at (2,0) — blocks Shiba's direct path right
+            SpawnObstacle(2, 0, true);
 
-            // Wall 2: blocks access to Home — fixed trees + 1 movable box
-            SpawnObstacle(3, 3, false); // fixed tree
-            SpawnObstacle(4, 3, true);  // movable box ← slides up to also block enemy
-            SpawnObstacle(5, 3, false); // fixed tree
+            // Fixed trees — narrow the route but don't block all paths
+            SpawnObstacle(0, 2, false);
+            SpawnObstacle(3, 3, false);
 
-            // Enemy at (5,0) — fast (1.5s), threatens from top-right
+            // Enemy at (5,0)
             SpawnEnemy(5, 0);
 
-            // Camera
             FitCamera(cols, rows);
-
             SetState(GameState.Playing);
-            Debug.Log("Level 1 loaded. Slide 2 boxes to clear path. Boxes can also block enemy.");
+
+            Debug.Log("Level 1 loaded. Shiba(0,0) Home(5,5) Enemy(5,0). Slide the box!");
         }
 
         // ===================== Input =====================
 
         private void HandleInput()
         {
-            var mouse = Mouse.current;
-            if (mouse == null) return;
+            // Read pointer state from either mouse or touch
+            bool pressedThisFrame = false;
+            bool releasedThisFrame = false;
+            Vector2 pointerPos = Vector2.zero;
 
-            if (mouse.leftButton.wasPressedThisFrame)
+            var mouse = Mouse.current;
+            if (mouse != null)
             {
-                pointerStart = mouse.position.ReadValue();
-                selectedObs = Raycast(pointerStart);
-                dragging = selectedObs != null;
+                pointerPos = mouse.position.ReadValue();
+                if (mouse.leftButton.wasPressedThisFrame) pressedThisFrame = true;
+                if (mouse.leftButton.wasReleasedThisFrame) releasedThisFrame = true;
             }
-            else if (mouse.leftButton.wasReleasedThisFrame && dragging)
+
+            // Touch overrides mouse if active
+            var touch = Touchscreen.current;
+            if (touch != null && touch.primaryTouch.press.isPressed)
             {
-                dragging = false;
+                pointerPos = touch.primaryTouch.position.ReadValue();
+                if (touch.primaryTouch.press.wasPressedThisFrame) pressedThisFrame = true;
+                if (touch.primaryTouch.press.wasReleasedThisFrame) releasedThisFrame = true;
+            }
+
+            if (pressedThisFrame)
+            {
+                pointerDown = true;
+                pointerStart = pointerPos;
+                selectedObs = FindObstacleAtScreen(pointerPos);
+                if (selectedObs != null)
+                    Debug.Log($"Selected box at ({selectedObs.Col},{selectedObs.Row})");
+            }
+
+            if (releasedThisFrame && pointerDown)
+            {
+                pointerDown = false;
                 if (selectedObs != null && !selectedObs.Sliding)
                 {
-                    var pointerEnd = mouse.position.ReadValue();
-                    var delta = pointerEnd - pointerStart;
-
+                    var delta = pointerPos - pointerStart;
                     int dc = 0, dr = 0;
 
-                    if (delta.magnitude < 20f)
+                    if (delta.magnitude >= 15f)
                     {
-                        // Simple click with no swipe: do nothing, wait for a swipe
-                    }
-                    else if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-                    {
-                        dc = delta.x > 0 ? 1 : -1; // left/right → col
-                    }
-                    else
-                    {
-                        dr = delta.y > 0 ? -1 : 1; // screen up → row decreases (top-left origin)
+                        if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
+                            dc = delta.x > 0 ? 1 : -1;
+                        else
+                            dr = delta.y > 0 ? -1 : 1; // screen up = row decrease
                     }
 
                     if (dc != 0 || dr != 0)
                     {
-                        SlideObstacle(selectedObs, dc, dr);
+                        Debug.Log($"Swipe direction: dc={dc} dr={dr}");
+                        if (selectedObs.TrySlide(dc, dr))
+                        {
+                            selectedObs.OnSlideComplete += OnObstacleSlideComplete;
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log("Swipe too short, try dragging further");
                     }
                 }
                 selectedObs = null;
             }
-
-            // Touch support
-            if (Touchscreen.current != null)
-            {
-                var touch = Touchscreen.current.primaryTouch;
-                if (touch.press.wasPressedThisFrame)
-                {
-                    pointerStart = touch.position.ReadValue();
-                    selectedObs = Raycast(pointerStart);
-                    dragging = selectedObs != null;
-                }
-                else if (touch.press.wasReleasedThisFrame && dragging)
-                {
-                    dragging = false;
-                    if (selectedObs != null && !selectedObs.Sliding)
-                    {
-                        var pointerEnd = touch.position.ReadValue();
-                        var delta = pointerEnd - pointerStart;
-
-                        int dc = 0, dr = 0;
-                        if (delta.magnitude >= 20f)
-                        {
-                            if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-                                dc = delta.x > 0 ? 1 : -1;
-                            else
-                                dr = delta.y > 0 ? -1 : 1;
-                        }
-
-                        if (dc != 0 || dr != 0)
-                            SlideObstacle(selectedObs, dc, dr);
-                    }
-                    selectedObs = null;
-                }
-            }
         }
 
-        private void SlideObstacle(ObstacleController obs, int dc, int dr)
+        /// <summary>
+        /// Convert screen position to grid cell and find movable obstacle there.
+        /// Much more reliable than Physics.Raycast for top-down orthographic cameras.
+        /// </summary>
+        private ObstacleController FindObstacleAtScreen(Vector2 screenPos)
         {
-            if (obs.TrySlide(dc, dr))
+            var cam = Camera.main;
+            if (cam == null) return null;
+
+            // Orthographic camera: ScreenToWorldPoint gives world XZ directly
+            var worldPos = cam.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 0f));
+            var (col, row) = GridManager.Instance.ToGrid(worldPos);
+
+            foreach (var obs in obstacles)
             {
-                // After slide animation finishes, tell Shiba to recalculate
-                obs.OnSlideComplete += OnObstacleSlideComplete;
+                if (obs.Col == col && obs.Row == row && obs.IsMovable && !obs.Sliding)
+                    return obs;
             }
+            return null;
         }
 
         private void OnObstacleSlideComplete()
         {
-            // Unsubscribe from all obstacles to avoid double-fire
             foreach (var obs in obstacles)
                 obs.OnSlideComplete -= OnObstacleSlideComplete;
 
+            // Shiba recalculates path after obstacle moves
             if (Shiba != null && Shiba.Alive && !Shiba.Arrived)
                 Shiba.RecalculatePath();
-        }
-
-        private ObstacleController Raycast(Vector2 screenPos)
-        {
-            var cam = Camera.main;
-            if (cam == null) return null;
-            var ray = cam.ScreenPointToRay(screenPos);
-            if (Physics.Raycast(ray, out var hit, 100f))
-            {
-                var oc = hit.collider.GetComponent<ObstacleController>();
-                if (oc != null && oc.IsMovable) return oc;
-            }
-            return null;
         }
 
         // ===================== State =====================
@@ -240,8 +217,8 @@ namespace ShibaHomeJam.Core
             var obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             obj.name = "Shiba";
             obj.transform.localScale = Vector3.one * 0.7f;
-            obj.GetComponent<Renderer>().material.color = new Color(1f, 0.9f, 0.2f); // bright yellow
-            Destroy(obj.GetComponent<Collider>()); // no raycast on shiba
+            obj.GetComponent<Renderer>().material.color = new Color(1f, 0.9f, 0.2f);
+            Destroy(obj.GetComponent<Collider>());
             var sc = obj.AddComponent<ShibaController>();
             sc.Init(col, row);
             allSpawned.Add(obj);
@@ -252,11 +229,11 @@ namespace ShibaHomeJam.Core
         {
             if (movable)
             {
-                // Movable box: gray cube, keeps BoxCollider for raycast
                 var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 obj.name = $"Box({col},{row})";
                 obj.transform.localScale = Vector3.one * 0.8f;
-                obj.GetComponent<Renderer>().material.color = new Color(0.6f, 0.55f, 0.4f); // tan/wood
+                obj.GetComponent<Renderer>().material.color = new Color(0.6f, 0.55f, 0.4f);
+                Destroy(obj.GetComponent<Collider>()); // not using physics raycast anymore
                 var oc = obj.AddComponent<ObstacleController>();
                 oc.Init(col, row, true);
                 obstacles.Add(oc);
@@ -264,12 +241,11 @@ namespace ShibaHomeJam.Core
             }
             else
             {
-                // Fixed tree: green cylinder, no collider (can't interact)
                 var obj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 obj.name = $"Tree({col},{row})";
                 obj.transform.localScale = new Vector3(0.7f, 0.5f, 0.7f);
-                obj.GetComponent<Renderer>().material.color = new Color(0.2f, 0.5f, 0.15f); // dark green
-                Destroy(obj.GetComponent<Collider>()); // no raycast on fixed
+                obj.GetComponent<Renderer>().material.color = new Color(0.2f, 0.5f, 0.15f);
+                Destroy(obj.GetComponent<Collider>());
                 var oc = obj.AddComponent<ObstacleController>();
                 oc.Init(col, row, false);
                 obstacles.Add(oc);
@@ -282,7 +258,7 @@ namespace ShibaHomeJam.Core
             var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             obj.name = $"Enemy({col},{row})";
             obj.transform.localScale = Vector3.one * 0.7f;
-            obj.GetComponent<Renderer>().material.color = new Color(1f, 0.5f, 0.1f); // orange
+            obj.GetComponent<Renderer>().material.color = new Color(1f, 0.5f, 0.1f);
             Destroy(obj.GetComponent<Collider>());
             var ec = obj.AddComponent<EnemyController>();
             ec.Init(col, row);
@@ -296,21 +272,19 @@ namespace ShibaHomeJam.Core
             var parent = new GameObject("Home");
             parent.transform.position = GridManager.Instance.ToWorld(col, row);
 
-            // Base (blue cube)
             var baseObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             baseObj.transform.SetParent(parent.transform);
             baseObj.transform.localPosition = new Vector3(0f, -0.1f, 0f);
             baseObj.transform.localScale = new Vector3(0.8f, 0.5f, 0.8f);
-            baseObj.GetComponent<Renderer>().material.color = new Color(0.3f, 0.5f, 0.95f); // blue
+            baseObj.GetComponent<Renderer>().material.color = new Color(0.3f, 0.5f, 0.95f);
             Destroy(baseObj.GetComponent<Collider>());
 
-            // Roof (rotated cube to look like pyramid from above)
             var roofObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             roofObj.transform.SetParent(parent.transform);
             roofObj.transform.localPosition = new Vector3(0f, 0.35f, 0f);
             roofObj.transform.localScale = new Vector3(0.6f, 0.35f, 0.6f);
             roofObj.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
-            roofObj.GetComponent<Renderer>().material.color = new Color(0.15f, 0.3f, 0.7f); // dark blue
+            roofObj.GetComponent<Renderer>().material.color = new Color(0.15f, 0.3f, 0.7f);
             Destroy(roofObj.GetComponent<Collider>());
 
             allSpawned.Add(parent);
@@ -333,7 +307,7 @@ namespace ShibaHomeJam.Core
                         ? new Color(0.55f, 0.75f, 0.40f)
                         : new Color(0.62f, 0.82f, 0.48f);
 
-                    Destroy(tile.GetComponent<Collider>()); // no raycast
+                    Destroy(tile.GetComponent<Collider>());
                     allSpawned.Add(tile);
                 }
             }
