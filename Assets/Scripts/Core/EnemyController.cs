@@ -16,7 +16,7 @@ namespace ShibaHomeJam.Core
 
         public event Action OnCaughtShiba;
 
-        private float moveInterval = 1.8f;
+        private float moveInterval = 2.5f;
         private float moveTimer;
         private float animSpeed = 5f;
 

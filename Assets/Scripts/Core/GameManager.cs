@@ -57,26 +57,24 @@ namespace ShibaHomeJam.Core
             int cols = 6, rows = 6;
             GridManager.Instance.Init(cols, rows);
 
-            // Home at (5,5)
+            // Home at (5,2) — right middle
             HomeCol = 5;
-            HomeRow = 5;
+            HomeRow = 2;
             GridManager.Instance.Set(HomeCol, HomeRow, CellType.Home);
             SpawnHome(HomeCol, HomeRow);
 
             // Floor
             SpawnFloor(cols, rows);
 
-            // Shiba at (0,0)
-            Shiba = SpawnShiba(0, 0);
+            // Shiba at (0,2) — left middle, same row as Home
+            Shiba = SpawnShiba(0, 2);
             Shiba.OnReachedHome += () => SetState(GameState.Clear);
             Shiba.OnCaught += () => SetState(GameState.GameOver);
 
-            // Movable box at (2,2)
+            // Movable box at (2,2) — directly between Shiba and Home on row 2
             SpawnObstacle(2, 2, true);
 
-            // No fixed obstacles in Level 1
-
-            // Enemy at (5,0) — faster than Shiba, creates urgency
+            // Enemy at (5,0) — top right, approaches from above
             SpawnEnemy(5, 0);
 
             FitCamera(cols, rows);
@@ -84,19 +82,22 @@ namespace ShibaHomeJam.Core
 
             // Verify pathfinding at start
             var gm = GridManager.Instance;
-            var path = gm.FindPath(0, 0, HomeCol, HomeRow);
+            var path = gm.FindPath(0, 2, HomeCol, HomeRow);
             if (path != null)
             {
-                var steps = new System.Text.StringBuilder("Shiba start path: ");
+                var steps = new System.Text.StringBuilder("Shiba path at start: (0,2)→");
                 foreach (var p in path) steps.Append($"({p.x},{p.y})→");
-                Debug.Log(steps.ToString().TrimEnd('→'));
+                var pathStr = steps.ToString().TrimEnd('→');
+                Debug.Log(pathStr);
+                Debug.Log($"Path length: {path.Count} steps (direct would be 5). Box at (2,2) forces detour.");
             }
             else
             {
-                Debug.Log("Shiba: path blocked at start, waiting for player");
+                Debug.Log("Shiba: no path found at start, waiting for player");
             }
 
-            Debug.Log("Level 1: Shiba(0,0) Home(5,5) Box(2,2) Enemy(5,0). Slide box to block enemy!");
+            Debug.Log("Level 1: Shiba(0,2) Home(5,2) Box(2,2) Enemy(5,0)");
+            Debug.Log("Slide box DOWN to open row 2, then RIGHT to block enemy!");
         }
 
         // ===================== Input =====================

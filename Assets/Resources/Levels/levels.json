@@ -4,8 +4,8 @@
       "level": 1,
       "width": 6,
       "height": 6,
-      "shiba": { "x": 0, "y": 0 },
-      "goal": { "x": 5, "y": 5 },
+      "shiba": { "x": 0, "y": 2 },
+      "goal": { "x": 5, "y": 2 },
       "obstacles": [
         { "x": 2, "y": 2, "obstacleType": "movable" }
       ],
@@ -17,31 +17,31 @@
       "level": 2,
       "width": 6,
       "height": 6,
-      "shiba": { "x": 0, "y": 0 },
-      "goal": { "x": 5, "y": 5 },
+      "shiba": { "x": 0, "y": 2 },
+      "goal": { "x": 5, "y": 2 },
       "obstacles": [
-        { "x": 2, "y": 1, "obstacleType": "movable" },
-        { "x": 3, "y": 3, "obstacleType": "movable" },
-        { "x": 1, "y": 3, "obstacleType": "fixed" },
-        { "x": 4, "y": 1, "obstacleType": "fixed" }
+        { "x": 2, "y": 2, "obstacleType": "movable" },
+        { "x": 4, "y": 2, "obstacleType": "movable" },
+        { "x": 1, "y": 1, "obstacleType": "fixed" },
+        { "x": 1, "y": 3, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 5, "y": 0 } },
-        { "type": "cat", "position": { "x": 0, "y": 5 } }
+        { "type": "cat", "position": { "x": 5, "y": 5 } }
       ]
     },
     {
       "level": 3,
       "width": 7,
       "height": 7,
-      "shiba": { "x": 0, "y": 0 },
-      "goal": { "x": 6, "y": 6 },
+      "shiba": { "x": 0, "y": 3 },
+      "goal": { "x": 6, "y": 3 },
       "obstacles": [
-        { "x": 2, "y": 2, "obstacleType": "movable" },
-        { "x": 4, "y": 4, "obstacleType": "movable" },
+        { "x": 2, "y": 3, "obstacleType": "movable" },
+        { "x": 4, "y": 3, "obstacleType": "movable" },
         { "x": 3, "y": 1, "obstacleType": "fixed" },
-        { "x": 1, "y": 3, "obstacleType": "fixed" },
-        { "x": 5, "y": 3, "obstacleType": "fixed" }
+        { "x": 3, "y": 5, "obstacleType": "fixed" },
+        { "x": 1, "y": 2, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 6, "y": 0 } },
@@ -52,40 +52,42 @@
       "level": 4,
       "width": 7,
       "height": 7,
-      "shiba": { "x": 0, "y": 0 },
-      "goal": { "x": 6, "y": 6 },
+      "shiba": { "x": 0, "y": 3 },
+      "goal": { "x": 6, "y": 3 },
       "obstacles": [
-        { "x": 2, "y": 1, "obstacleType": "movable" },
-        { "x": 3, "y": 3, "obstacleType": "movable" },
-        { "x": 5, "y": 4, "obstacleType": "movable" },
-        { "x": 1, "y": 2, "obstacleType": "fixed" },
-        { "x": 4, "y": 2, "obstacleType": "fixed" },
-        { "x": 2, "y": 5, "obstacleType": "fixed" }
+        { "x": 2, "y": 3, "obstacleType": "movable" },
+        { "x": 4, "y": 3, "obstacleType": "movable" },
+        { "x": 3, "y": 2, "obstacleType": "movable" },
+        { "x": 1, "y": 1, "obstacleType": "fixed" },
+        { "x": 1, "y": 5, "obstacleType": "fixed" },
+        { "x": 5, "y": 1, "obstacleType": "fixed" },
+        { "x": 5, "y": 5, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 6, "y": 0 } },
-        { "type": "cat", "position": { "x": 3, "y": 6 } }
+        { "type": "cat", "position": { "x": 6, "y": 6 } }
       ]
     },
     {
       "level": 5,
       "width": 8,
       "height": 8,
-      "shiba": { "x": 0, "y": 0 },
-      "goal": { "x": 7, "y": 7 },
+      "shiba": { "x": 0, "y": 3 },
+      "goal": { "x": 7, "y": 3 },
       "obstacles": [
-        { "x": 2, "y": 2, "obstacleType": "movable" },
+        { "x": 2, "y": 3, "obstacleType": "movable" },
         { "x": 4, "y": 3, "obstacleType": "movable" },
-        { "x": 6, "y": 5, "obstacleType": "movable" },
+        { "x": 6, "y": 3, "obstacleType": "movable" },
         { "x": 3, "y": 1, "obstacleType": "fixed" },
-        { "x": 1, "y": 4, "obstacleType": "fixed" },
+        { "x": 3, "y": 5, "obstacleType": "fixed" },
         { "x": 5, "y": 2, "obstacleType": "fixed" },
-        { "x": 3, "y": 6, "obstacleType": "fixed" }
+        { "x": 5, "y": 4, "obstacleType": "fixed" },
+        { "x": 1, "y": 6, "obstacleType": "fixed" }
       ],
       "enemies": [
         { "type": "cat", "position": { "x": 7, "y": 0 } },
-        { "type": "cat", "position": { "x": 0, "y": 7 } },
-        { "type": "cat", "position": { "x": 7, "y": 4 } }
+        { "type": "cat", "position": { "x": 7, "y": 7 } },
+        { "type": "cat", "position": { "x": 0, "y": 7 } }
       ]
     }
   ]

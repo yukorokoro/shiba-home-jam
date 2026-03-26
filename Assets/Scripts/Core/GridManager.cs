@@ -116,8 +116,8 @@ namespace ShibaHomeJam.Core
                     if (visited[next.x, next.y]) continue;
 
                     var cell = grid[next.x, next.y];
-                    // Can walk through Empty or Home; cannot walk through Obstacle
-                    if (cell == CellType.Obstacle) continue;
+                    // Can walk through Empty or Home; blocked by Obstacle and Enemy
+                    if (cell == CellType.Obstacle || cell == CellType.Enemy) continue;
 
                     visited[next.x, next.y] = true;
                     parent[next] = current;
