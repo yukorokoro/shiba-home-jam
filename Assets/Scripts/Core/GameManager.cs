@@ -76,19 +76,28 @@ namespace ShibaHomeJam.Core
             Shiba.OnReachedHome += () => SetState(GameState.Clear);
             Shiba.OnCaught += () => SetState(GameState.GameOver);
 
-            // Obstacles
+            // Wall 1: L-shape trapping Shiba in top-left 2x2
+            SpawnObstacle(2, 0);
             SpawnObstacle(2, 1);
-            SpawnObstacle(1, 3);
-            SpawnObstacle(3, 2);
+            SpawnObstacle(0, 2);
+            SpawnObstacle(1, 2);
+            SpawnObstacle(2, 2);
 
-            // Enemy at (5,0)
+            // Wall 2: L-shape blocking access to Home zone
+            SpawnObstacle(3, 3);
+            SpawnObstacle(4, 3);
+            SpawnObstacle(5, 3);
+            SpawnObstacle(3, 4);
+            SpawnObstacle(3, 5);
+
+            // Enemy at (5,0) — fast (1.5s), threatens from top-right
             SpawnEnemy(5, 0);
 
             // Camera
             FitCamera(cols, rows);
 
             SetState(GameState.Playing);
-            Debug.Log("Level loaded. Shiba at (0,0), Home at (5,5), Enemy at (5,0)");
+            Debug.Log("Level 1 loaded. Must move 2+ obstacles to clear path.");
         }
 
         // ===================== Input =====================
