@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace ShibaHomeJam.Core
@@ -279,8 +280,63 @@ namespace ShibaHomeJam.Core
             var ec = obj.AddComponent<EnemyController>();
             ec.Init(col, row);
             ec.OnCaughtShiba += () => SetState(GameState.GameOver);
+            ec.OnProximityChanged += OnEnemyProximity;
             enemies.Add(ec);
             allSpawned.Add(obj);
+        }
+
+        // ===================== Tension Effects =====================
+
+        private Coroutine pulseCoroutine;
+
+        private void OnEnemyProximity(int distance)
+        {
+            if (State != GameState.Playing) return;
+
+            if (distance <= 1)
+            {
+                // Screen shake when 1 cell away
+                StartCoroutine(ScreenShake());
+            }
+            else if (distance <= 3)
+            {
+                // Red pulse when within 3 cells
+                if (pulseCoroutine == null)
+                    pulseCoroutine = StartCoroutine(RedPulse());
+            }
+        }
+
+        private IEnumerator RedPulse()
+        {
+            var cam = Camera.main;
+            if (cam == null) yield break;
+
+            Color original = cam.backgroundColor;
+            Color tinted = Color.Lerp(original, Color.red, 0.3f);
+
+            cam.backgroundColor = tinted;
+            yield return new WaitForSeconds(0.1f);
+            cam.backgroundColor = original;
+
+            pulseCoroutine = null;
+        }
+
+        private IEnumerator ScreenShake()
+        {
+            var cam = Camera.main;
+            if (cam == null) yield break;
+
+            Vector3 origin = cam.transform.position;
+            float t = 0f;
+            while (t < 0.15f)
+            {
+                t += Time.deltaTime;
+                float x = UnityEngine.Random.Range(-0.08f, 0.08f);
+                float z = UnityEngine.Random.Range(-0.08f, 0.08f);
+                cam.transform.position = origin + new Vector3(x, 0, z);
+                yield return null;
+            }
+            cam.transform.position = origin;
         }
 
         private void SpawnHome(int col, int row)
