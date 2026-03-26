@@ -25,12 +25,10 @@ namespace ShibaHomeJam.UI
         {
             if (gameOverPanel != null) gameOverPanel.SetActive(false);
             if (clearPanel != null) clearPanel.SetActive(false);
+            if (levelText != null) levelText.text = "Level 1";
 
             if (GameManager.Instance != null)
-            {
                 GameManager.Instance.OnStateChanged += OnGameStateChanged;
-                UpdateLevelText();
-            }
         }
 
         private void OnDestroy()
@@ -52,27 +50,19 @@ namespace ShibaHomeJam.UI
                 case GameState.Playing:
                     if (gameOverPanel != null) gameOverPanel.SetActive(false);
                     if (clearPanel != null) clearPanel.SetActive(false);
-                    UpdateLevelText();
                     break;
             }
         }
 
-        private void UpdateLevelText()
-        {
-            if (levelText != null && GameManager.Instance != null)
-                levelText.text = $"Level {GameManager.Instance.CurrentLevel}";
-        }
-
         private void OnRetryClicked()
         {
-            if (GameManager.Instance != null)
-                GameManager.Instance.RestartLevel();
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 
         private void OnNextClicked()
         {
-            if (GameManager.Instance != null)
-                GameManager.Instance.NextLevel();
+            // For now just reload same scene
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
     }
 }

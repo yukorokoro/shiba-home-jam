@@ -9,101 +9,137 @@ namespace ShibaHomeJam.Core
         Obstacle,
         Shiba,
         Enemy,
-        Goal,
-        Wall
+        Home
     }
 
+    /// <summary>
+    /// Pure data grid. No visuals, no spawning. Just tracks what is in each cell.
+    /// Coordinate system: (col, row) where (0,0) is top-left.
+    /// World mapping: col → +X, row → -Z (so row 0 is at top of screen).
+    /// </summary>
     public class GridManager : MonoBehaviour
     {
         public static GridManager Instance { get; private set; }
 
-        [SerializeField] private int width = 5;
-        [SerializeField] private int height = 5;
+        public int Cols { get; private set; }
+        public int Rows { get; private set; }
 
-        private CellType[,] grid;
-        private Dictionary<Vector2Int, GameObject> occupants = new Dictionary<Vector2Int, GameObject>();
-
-        public int Width => width;
-        public int Height => height;
+        private CellType[,] grid; // [col, row]
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
         }
 
-        public void InitializeGrid(int w, int h)
+        public void Init(int cols, int rows)
         {
-            width = Mathf.Clamp(w, 5, 8);
-            height = Mathf.Clamp(h, 5, 8);
-            grid = new CellType[width, height];
-            occupants.Clear();
-
-            for (int x = 0; x < width; x++)
-                for (int y = 0; y < height; y++)
-                    grid[x, y] = CellType.Empty;
+            Cols = cols;
+            Rows = rows;
+            grid = new CellType[cols, rows];
         }
 
-        public bool IsInBounds(Vector2Int pos)
+        // ---- query ----
+
+        public bool InBounds(int col, int row)
         {
-            return pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height;
+            return col >= 0 && col < Cols && row >= 0 && row < Rows;
         }
 
-        public bool IsEmpty(Vector2Int pos)
+        public CellType Get(int col, int row)
         {
-            return IsInBounds(pos) && grid[pos.x, pos.y] == CellType.Empty;
+            if (!InBounds(col, row)) return CellType.Obstacle; // out of bounds acts as wall
+            return grid[col, row];
         }
 
-        public CellType GetCell(Vector2Int pos)
+        public bool IsWalkable(int col, int row)
         {
-            if (!IsInBounds(pos)) return CellType.Wall;
-            return grid[pos.x, pos.y];
+            if (!InBounds(col, row)) return false;
+            var c = grid[col, row];
+            return c == CellType.Empty || c == CellType.Home;
         }
 
-        public void SetCell(Vector2Int pos, CellType type, GameObject occupant = null)
-        {
-            if (!IsInBounds(pos)) return;
-            grid[pos.x, pos.y] = type;
+        // ---- mutate ----
 
-            if (occupant != null)
-                occupants[pos] = occupant;
-            else
-                occupants.Remove(pos);
+        public void Set(int col, int row, CellType type)
+        {
+            if (InBounds(col, row)) grid[col, row] = type;
         }
 
-        public GameObject GetOccupant(Vector2Int pos)
+        public void Clear(int col, int row)
         {
-            occupants.TryGetValue(pos, out var obj);
-            return obj;
+            Set(col, row, CellType.Empty);
         }
 
-        public void MoveOccupant(Vector2Int from, Vector2Int to)
+        // ---- coordinate conversion ----
+        // World: X = col, Y = 0, Z = -(row)  so row 0 is at Z=0 (top of screen with top-down cam)
+
+        public Vector3 ToWorld(int col, int row)
         {
-            if (!IsInBounds(from) || !IsInBounds(to)) return;
-
-            var type = grid[from.x, from.y];
-            occupants.TryGetValue(from, out var obj);
-
-            grid[from.x, from.y] = CellType.Empty;
-            grid[to.x, to.y] = type;
-
-            occupants.Remove(from);
-            if (obj != null)
-                occupants[to] = obj;
+            return new Vector3(col, 0f, -row);
         }
 
-        public Vector3 GridToWorld(Vector2Int gridPos)
+        public (int col, int row) ToGrid(Vector3 world)
         {
-            return new Vector3(gridPos.x, 0f, gridPos.y);
+            return (Mathf.RoundToInt(world.x), Mathf.RoundToInt(-world.z));
         }
 
-        public Vector2Int WorldToGrid(Vector3 worldPos)
+        // ---- pathfinding (BFS, used by Shiba) ----
+
+        public List<Vector2Int> FindPath(int fromCol, int fromRow, int toCol, int toRow)
         {
-            return new Vector2Int(Mathf.RoundToInt(worldPos.x), Mathf.RoundToInt(worldPos.z));
+            if (fromCol == toCol && fromRow == toRow) return new List<Vector2Int>();
+
+            var visited = new bool[Cols, Rows];
+            var parent = new Dictionary<Vector2Int, Vector2Int>();
+            var queue = new Queue<Vector2Int>();
+
+            var start = new Vector2Int(fromCol, fromRow);
+            var goal = new Vector2Int(toCol, toRow);
+
+            queue.Enqueue(start);
+            visited[fromCol, fromRow] = true;
+
+            Vector2Int[] dirs = {
+                new Vector2Int(1, 0), new Vector2Int(-1, 0),
+                new Vector2Int(0, 1), new Vector2Int(0, -1)
+            };
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+
+                foreach (var d in dirs)
+                {
+                    var next = current + d;
+                    if (!InBounds(next.x, next.y)) continue;
+                    if (visited[next.x, next.y]) continue;
+
+                    var cell = grid[next.x, next.y];
+                    // Can walk through Empty or Home; cannot walk through Obstacle
+                    if (cell == CellType.Obstacle) continue;
+
+                    visited[next.x, next.y] = true;
+                    parent[next] = current;
+                    queue.Enqueue(next);
+
+                    if (next == goal)
+                    {
+                        // reconstruct
+                        var path = new List<Vector2Int>();
+                        var node = goal;
+                        while (node != start)
+                        {
+                            path.Add(node);
+                            node = parent[node];
+                        }
+                        path.Reverse();
+                        return path;
+                    }
+                }
+            }
+
+            return null; // no path
         }
     }
 }

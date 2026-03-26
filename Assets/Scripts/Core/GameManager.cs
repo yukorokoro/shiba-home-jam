@@ -1,60 +1,49 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using System;
 using System.Collections.Generic;
 
 namespace ShibaHomeJam.Core
 {
     public enum GameState
     {
-        Loading,
         Playing,
-        Paused,
         Clear,
         GameOver
     }
 
+    /// <summary>
+    /// Owns the game loop: spawns level, handles input, game state.
+    /// Level data is hardcoded for now (Level 1).
+    /// </summary>
     public class GameManager : MonoBehaviour
     {
         public static GameManager Instance { get; private set; }
 
-        [SerializeField] private GameObject shibaPrefab;
-        [SerializeField] private GameObject obstaclePrefab;
-        [SerializeField] private GameObject catPrefab;
-        [SerializeField] private GameObject thiefPrefab;
-        [SerializeField] private GameObject goalPrefab;
+        public GameState State { get; private set; }
+        public ShibaController Shiba { get; private set; }
+        public int HomeCol { get; private set; }
+        public int HomeRow { get; private set; }
 
-        public GameState State { get; private set; } = GameState.Loading;
-        public int CurrentLevel { get; private set; } = 1;
-        public int TurnCount { get; private set; }
+        public event System.Action<GameState> OnStateChanged;
 
-        public event Action<GameState> OnStateChanged;
-        public event Action<int> OnTurnAdvanced;
-
-        private ShibaController shiba;
         private List<ObstacleController> obstacles = new List<ObstacleController>();
         private List<EnemyController> enemies = new List<EnemyController>();
-        private List<GameObject> spawnedObjects = new List<GameObject>();
-        private LevelData currentLevelData;
+        private List<GameObject> allSpawned = new List<GameObject>();
 
-        // 入力用
-        private Vector2 touchStart;
-        private ObstacleController selectedObstacle;
-        private bool pressing;
+        // Input state
+        private ObstacleController selectedObs;
+        private Vector2 pointerStart;
+        private bool dragging;
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
         }
 
         private void Start()
         {
-            LoadLevel(CurrentLevel);
+            LoadLevel();
         }
 
         private void Update()
@@ -63,355 +52,258 @@ namespace ShibaHomeJam.Core
             HandleInput();
         }
 
-        public void LoadLevel(int levelNumber)
+        // ===================== Level Setup =====================
+
+        private void LoadLevel()
         {
-            ClearLevel();
-            CurrentLevel = levelNumber;
-            TurnCount = 0;
+            ClearAll();
 
-            currentLevelData = LevelLoader.LoadLevel(levelNumber);
-            if (currentLevelData == null)
-            {
-                Debug.LogError($"Failed to load level {levelNumber}");
-                return;
-            }
+            // Level 1: 6x6
+            int cols = 6, rows = 6;
+            GridManager.Instance.Init(cols, rows);
 
-            GridManager.Instance.InitializeGrid(currentLevelData.width, currentLevelData.height);
-            SpawnGridFloor();
-            SpawnEntities();
-            FitCamera();
+            // Home at (5,5)
+            HomeCol = 5;
+            HomeRow = 5;
+            GridManager.Instance.Set(HomeCol, HomeRow, CellType.Home);
+            SpawnHome(HomeCol, HomeRow);
+
+            // Floor tiles
+            SpawnFloor(cols, rows);
+
+            // Shiba at (0,0)
+            Shiba = SpawnShiba(0, 0);
+            Shiba.OnReachedHome += () => SetState(GameState.Clear);
+            Shiba.OnCaught += () => SetState(GameState.GameOver);
+
+            // Obstacles
+            SpawnObstacle(2, 1);
+            SpawnObstacle(1, 3);
+            SpawnObstacle(3, 2);
+
+            // Enemy at (5,0)
+            SpawnEnemy(5, 0);
+
+            // Camera
+            FitCamera(cols, rows);
+
             SetState(GameState.Playing);
+            Debug.Log("Level loaded. Shiba at (0,0), Home at (5,5), Enemy at (5,0)");
         }
 
-        public void RestartLevel()
-        {
-            LoadLevel(CurrentLevel);
-        }
-
-        public void NextLevel()
-        {
-            LoadLevel(CurrentLevel + 1);
-        }
-
-        private void SpawnEntities()
-        {
-            // ゴール配置 (Blue cube + roof)
-            var goalPos = currentLevelData.goal.ToVector2Int();
-            if (goalPrefab != null)
-            {
-                var goalObj = Instantiate(goalPrefab, GridManager.Instance.GridToWorld(goalPos), Quaternion.identity);
-                GridManager.Instance.SetCell(goalPos, CellType.Goal, goalObj);
-            }
-            else
-            {
-                var goalObj = CreateGoalPlaceholder(goalPos);
-                GridManager.Instance.SetCell(goalPos, CellType.Goal, goalObj);
-            }
-
-            // 柴犬配置 (Yellow sphere)
-            var shibaPos = currentLevelData.shiba.ToVector2Int();
-            GameObject shibaObj;
-            if (shibaPrefab != null)
-            {
-                shibaObj = Instantiate(shibaPrefab, GridManager.Instance.GridToWorld(shibaPos), Quaternion.identity);
-            }
-            else
-            {
-                shibaObj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                shibaObj.name = "Shiba";
-                shibaObj.transform.position = GridManager.Instance.GridToWorld(shibaPos);
-                shibaObj.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
-                shibaObj.GetComponent<Renderer>().material.color = new Color(1f, 0.85f, 0.2f); // Yellow
-                // 柴犬のColliderを除去（Raycastで障害物だけを拾うため）
-                Destroy(shibaObj.GetComponent<Collider>());
-            }
-            shiba = shibaObj.GetComponent<ShibaController>();
-            if (shiba == null) shiba = shibaObj.AddComponent<ShibaController>();
-            shiba.Initialize(shibaPos);
-            shiba.OnReachedGoal += HandleLevelClear;
-            shiba.OnCaught += HandleGameOver;
-
-            // 障害物配置 (Gray cube)
-            foreach (var obsData in currentLevelData.obstacles)
-            {
-                var pos = obsData.ToVector2Int();
-                GameObject obj;
-                if (obstaclePrefab != null)
-                {
-                    obj = Instantiate(obstaclePrefab, GridManager.Instance.GridToWorld(pos), Quaternion.identity);
-                }
-                else
-                {
-                    obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    obj.name = "Obstacle";
-                    obj.transform.position = GridManager.Instance.GridToWorld(pos);
-                    obj.transform.localScale = new Vector3(0.85f, 0.85f, 0.85f);
-                    obj.GetComponent<Renderer>().material.color = new Color(0.6f, 0.6f, 0.6f); // Gray
-                    // BoxColliderはそのまま残す（Raycast用）
-                }
-                var obs = obj.GetComponent<ObstacleController>();
-                if (obs == null) obs = obj.AddComponent<ObstacleController>();
-                obs.Initialize(pos);
-                obstacles.Add(obs);
-            }
-
-            // 敵配置
-            foreach (var enemyData in currentLevelData.enemies)
-            {
-                var pos = enemyData.position.ToVector2Int();
-                GameObject obj;
-                bool isThief = enemyData.type == "thief";
-
-                if ((isThief ? thiefPrefab : catPrefab) != null)
-                {
-                    obj = Instantiate(isThief ? thiefPrefab : catPrefab,
-                        GridManager.Instance.GridToWorld(pos), Quaternion.identity);
-                }
-                else
-                {
-                    obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    obj.name = isThief ? "Enemy_thief" : "Enemy_cat";
-                    obj.transform.position = GridManager.Instance.GridToWorld(pos);
-                    obj.transform.localScale = new Vector3(0.75f, 0.75f, 0.75f);
-                    obj.GetComponent<Renderer>().material.color = isThief
-                        ? new Color(0.6f, 0.2f, 0.8f)   // Purple for thief
-                        : new Color(1f, 0.5f, 0.1f);     // Orange for cat
-                    // 敵のColliderを除去（Raycastで障害物だけを拾うため）
-                    Destroy(obj.GetComponent<Collider>());
-                }
-                var enemy = obj.GetComponent<EnemyController>();
-                if (enemy == null) enemy = obj.AddComponent<EnemyController>();
-                enemy.Initialize(pos, enemyData.ToEnemyType());
-                enemies.Add(enemy);
-            }
-        }
+        // ===================== Input =====================
 
         private void HandleInput()
         {
             var mouse = Mouse.current;
             if (mouse == null) return;
 
-            var position = mouse.position.ReadValue();
-
             if (mouse.leftButton.wasPressedThisFrame)
             {
-                pressing = true;
-                touchStart = position;
-                selectedObstacle = RaycastObstacle(position);
+                pointerStart = mouse.position.ReadValue();
+                selectedObs = Raycast(pointerStart);
+                dragging = selectedObs != null;
             }
-            else if (mouse.leftButton.wasReleasedThisFrame && pressing)
+            else if (mouse.leftButton.wasReleasedThisFrame && dragging)
             {
-                pressing = false;
-                if (selectedObstacle != null)
+                dragging = false;
+                if (selectedObs != null && !selectedObs.Sliding)
                 {
-                    var delta = position - touchStart;
-                    Vector2Int? dir;
+                    var pointerEnd = mouse.position.ReadValue();
+                    var delta = pointerEnd - pointerStart;
 
-                    // クリック（ほぼ動かさない）の場合は右にスライド
-                    if (delta.magnitude < 15f)
+                    int dc = 0, dr = 0;
+
+                    if (delta.magnitude < 20f)
                     {
-                        dir = Vector2Int.right;
+                        // Simple click with no swipe: do nothing, wait for a swipe
+                    }
+                    else if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
+                    {
+                        dc = delta.x > 0 ? 1 : -1; // left/right → col
                     }
                     else
                     {
-                        dir = ObstacleController.DetectSwipeDirection(touchStart, position, 15f);
+                        dr = delta.y > 0 ? -1 : 1; // screen up → row decreases (top-left origin)
                     }
 
-                    if (dir.HasValue && selectedObstacle.TrySlide(dir.Value))
+                    if (dc != 0 || dr != 0)
                     {
-                        AdvanceTurn();
+                        selectedObs.TrySlide(dc, dr);
                     }
-                    selectedObstacle = null;
                 }
+                selectedObs = null;
             }
 
-            // タッチ入力対応
+            // Touch support
             if (Touchscreen.current != null)
             {
-                var touchscreen = Touchscreen.current;
-                if (touchscreen.primaryTouch.press.wasPressedThisFrame)
+                var touch = Touchscreen.current.primaryTouch;
+                if (touch.press.wasPressedThisFrame)
                 {
-                    var touchPos = touchscreen.primaryTouch.position.ReadValue();
-                    pressing = true;
-                    touchStart = touchPos;
-                    selectedObstacle = RaycastObstacle(touchPos);
+                    pointerStart = touch.position.ReadValue();
+                    selectedObs = Raycast(pointerStart);
+                    dragging = selectedObs != null;
                 }
-                else if (touchscreen.primaryTouch.press.wasReleasedThisFrame && pressing)
+                else if (touch.press.wasReleasedThisFrame && dragging)
                 {
-                    pressing = false;
-                    if (selectedObstacle != null)
+                    dragging = false;
+                    if (selectedObs != null && !selectedObs.Sliding)
                     {
-                        var touchPos = touchscreen.primaryTouch.position.ReadValue();
-                        var dir = ObstacleController.DetectSwipeDirection(touchStart, touchPos, 15f);
-                        if (dir.HasValue && selectedObstacle.TrySlide(dir.Value))
+                        var pointerEnd = touch.position.ReadValue();
+                        var delta = pointerEnd - pointerStart;
+
+                        int dc = 0, dr = 0;
+                        if (delta.magnitude >= 20f)
                         {
-                            AdvanceTurn();
+                            if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
+                                dc = delta.x > 0 ? 1 : -1;
+                            else
+                                dr = delta.y > 0 ? -1 : 1;
                         }
-                        selectedObstacle = null;
+
+                        if (dc != 0 || dr != 0)
+                            selectedObs.TrySlide(dc, dr);
                     }
+                    selectedObs = null;
                 }
             }
         }
 
-        private ObstacleController RaycastObstacle(Vector2 screenPos)
+        private ObstacleController Raycast(Vector2 screenPos)
         {
             var cam = Camera.main;
             if (cam == null) return null;
-
             var ray = cam.ScreenPointToRay(screenPos);
             if (Physics.Raycast(ray, out var hit, 100f))
-            {
                 return hit.collider.GetComponent<ObstacleController>();
-            }
             return null;
         }
 
-        private void AdvanceTurn()
+        // ===================== State =====================
+
+        private void SetState(GameState s)
         {
-            TurnCount++;
-            OnTurnAdvanced?.Invoke(TurnCount);
-
-            // 柴犬の自動移動
-            shiba.AutoMove();
-
-            // 敵の移動
-            foreach (var enemy in enemies)
-            {
-                bool caught = enemy.TryAdvance(shiba.GridPosition);
-                if (caught)
-                {
-                    shiba.SetCaught();
-                    HandleGameOver();
-                    return;
-                }
-            }
-
-            // ターン制限チェック
-            if (currentLevelData.turnLimit > 0 && TurnCount >= currentLevelData.turnLimit)
-            {
-                HandleGameOver();
-            }
+            State = s;
+            OnStateChanged?.Invoke(s);
         }
 
-        private void HandleLevelClear()
-        {
-            SetState(GameState.Clear);
-            Debug.Log($"Level {CurrentLevel} Clear! Turns: {TurnCount}");
-        }
+        // ===================== Camera =====================
 
-        private void HandleGameOver()
-        {
-            SetState(GameState.GameOver);
-            Debug.Log($"Game Over at Level {CurrentLevel}, Turn {TurnCount}");
-        }
-
-        private void SetState(GameState newState)
-        {
-            State = newState;
-            OnStateChanged?.Invoke(newState);
-        }
-
-        private void ClearLevel()
-        {
-            if (shiba != null)
-            {
-                shiba.OnReachedGoal -= HandleLevelClear;
-                shiba.OnCaught -= HandleGameOver;
-                Destroy(shiba.gameObject);
-            }
-
-            foreach (var obs in obstacles) if (obs != null) Destroy(obs.gameObject);
-            foreach (var enemy in enemies) if (enemy != null) Destroy(enemy.gameObject);
-            foreach (var obj in spawnedObjects) if (obj != null) Destroy(obj);
-            obstacles.Clear();
-            enemies.Clear();
-            spawnedObjects.Clear();
-
-            // ゴールオブジェクト削除
-            if (currentLevelData != null)
-            {
-                var goalObj = GridManager.Instance.GetOccupant(currentLevelData.goal.ToVector2Int());
-                if (goalObj != null) Destroy(goalObj);
-            }
-        }
-
-        // ========== Camera ==========
-
-        private void FitCamera()
+        private void FitCamera(int cols, int rows)
         {
             var cam = Camera.main;
             if (cam == null) return;
 
-            var gm = GridManager.Instance;
-            float cx = (gm.Width - 1) * 0.5f;
-            float cz = (gm.Height - 1) * 0.5f;
+            float cx = (cols - 1) * 0.5f;
+            float cz = -(rows - 1) * 0.5f;
 
-            // 真上から見下ろし
             cam.transform.position = new Vector3(cx, 10f, cz);
             cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
             cam.orthographic = true;
-            // グリッドが画面にフィットするサイズ (+1でパディング)
-            cam.orthographicSize = Mathf.Max(gm.Width, gm.Height) * 0.5f + 1f;
+            cam.orthographicSize = Mathf.Max(cols, rows) * 0.5f + 1.5f;
         }
 
-        // ========== Grid Floor ==========
+        // ===================== Spawning =====================
 
-        private void SpawnGridFloor()
+        private ShibaController SpawnShiba(int col, int row)
         {
-            var gm = GridManager.Instance;
+            var obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            obj.name = "Shiba";
+            obj.transform.localScale = Vector3.one * 0.7f;
+            obj.GetComponent<Renderer>().material.color = new Color(1f, 0.9f, 0.2f); // bright yellow
+            Destroy(obj.GetComponent<Collider>()); // no raycast on shiba
+            var sc = obj.AddComponent<ShibaController>();
+            sc.Init(col, row);
+            allSpawned.Add(obj);
+            return sc;
+        }
 
-            for (int x = 0; x < gm.Width; x++)
+        private void SpawnObstacle(int col, int row)
+        {
+            var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            obj.name = $"Obstacle({col},{row})";
+            obj.transform.localScale = Vector3.one * 0.85f;
+            obj.GetComponent<Renderer>().material.color = new Color(0.55f, 0.55f, 0.55f); // gray
+            // Keep BoxCollider for raycast!
+            var oc = obj.AddComponent<ObstacleController>();
+            oc.Init(col, row);
+            obstacles.Add(oc);
+            allSpawned.Add(obj);
+        }
+
+        private void SpawnEnemy(int col, int row)
+        {
+            var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            obj.name = $"Enemy({col},{row})";
+            obj.transform.localScale = Vector3.one * 0.7f;
+            obj.GetComponent<Renderer>().material.color = new Color(1f, 0.5f, 0.1f); // orange
+            Destroy(obj.GetComponent<Collider>());
+            var ec = obj.AddComponent<EnemyController>();
+            ec.Init(col, row);
+            ec.OnCaughtShiba += () => SetState(GameState.GameOver);
+            enemies.Add(ec);
+            allSpawned.Add(obj);
+        }
+
+        private void SpawnHome(int col, int row)
+        {
+            var parent = new GameObject("Home");
+            parent.transform.position = GridManager.Instance.ToWorld(col, row);
+
+            // Base (blue cube)
+            var baseObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            baseObj.transform.SetParent(parent.transform);
+            baseObj.transform.localPosition = new Vector3(0f, -0.1f, 0f);
+            baseObj.transform.localScale = new Vector3(0.8f, 0.5f, 0.8f);
+            baseObj.GetComponent<Renderer>().material.color = new Color(0.3f, 0.5f, 0.95f); // blue
+            Destroy(baseObj.GetComponent<Collider>());
+
+            // Roof (rotated cube to look like pyramid from above)
+            var roofObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            roofObj.transform.SetParent(parent.transform);
+            roofObj.transform.localPosition = new Vector3(0f, 0.35f, 0f);
+            roofObj.transform.localScale = new Vector3(0.6f, 0.35f, 0.6f);
+            roofObj.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
+            roofObj.GetComponent<Renderer>().material.color = new Color(0.15f, 0.3f, 0.7f); // dark blue
+            Destroy(roofObj.GetComponent<Collider>());
+
+            allSpawned.Add(parent);
+        }
+
+        private void SpawnFloor(int cols, int rows)
+        {
+            for (int c = 0; c < cols; c++)
             {
-                for (int y = 0; y < gm.Height; y++)
+                for (int r = 0; r < rows; r++)
                 {
                     var tile = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                    tile.name = $"Tile_{x}_{y}";
-                    tile.transform.position = new Vector3(x, -0.5f, y);
+                    tile.name = $"Tile_{c}_{r}";
+                    tile.transform.position = GridManager.Instance.ToWorld(c, r) + Vector3.down * 0.5f;
                     tile.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
                     tile.transform.localScale = new Vector3(0.95f, 0.95f, 1f);
 
-                    var renderer = tile.GetComponent<Renderer>();
-                    bool dark = (x + y) % 2 == 0;
-                    renderer.material.color = dark
-                        ? new Color(0.65f, 0.80f, 0.50f)  // Light green
-                        : new Color(0.55f, 0.72f, 0.42f);  // Slightly darker green
+                    bool dark = (c + r) % 2 == 0;
+                    tile.GetComponent<Renderer>().material.color = dark
+                        ? new Color(0.55f, 0.75f, 0.40f)
+                        : new Color(0.62f, 0.82f, 0.48f);
 
-                    // タイルのColliderを除去（Raycastの邪魔になる）
-                    Destroy(tile.GetComponent<Collider>());
-
-                    spawnedObjects.Add(tile);
+                    Destroy(tile.GetComponent<Collider>()); // no raycast
+                    allSpawned.Add(tile);
                 }
             }
         }
 
-        // ========== Placeholder Factories ==========
+        // ===================== Cleanup =====================
 
-        private GameObject CreateGoalPlaceholder(Vector2Int pos)
+        private void ClearAll()
         {
-            // 家: 青いベース + 三角屋根
-            var parent = new GameObject("Goal");
-            parent.transform.position = GridManager.Instance.GridToWorld(pos);
-
-            // ベース（青い箱）
-            var baseObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            baseObj.name = "GoalBase";
-            baseObj.transform.SetParent(parent.transform);
-            baseObj.transform.localPosition = Vector3.zero;
-            baseObj.transform.localScale = new Vector3(0.8f, 0.6f, 0.8f);
-            baseObj.GetComponent<Renderer>().material.color = new Color(0.3f, 0.5f, 0.9f); // Blue
-            Destroy(baseObj.GetComponent<Collider>());
-
-            // 屋根（三角形をシミュレート: 薄くて回転したCube）
-            var roofObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            roofObj.name = "GoalRoof";
-            roofObj.transform.SetParent(parent.transform);
-            roofObj.transform.localPosition = new Vector3(0f, 0.5f, 0f);
-            roofObj.transform.localScale = new Vector3(0.9f, 0.4f, 0.9f);
-            roofObj.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
-            roofObj.GetComponent<Renderer>().material.color = new Color(0.2f, 0.35f, 0.75f); // Darker blue
-            Destroy(roofObj.GetComponent<Collider>());
-
-            return parent;
+            foreach (var obj in allSpawned)
+                if (obj != null) Destroy(obj);
+            allSpawned.Clear();
+            obstacles.Clear();
+            enemies.Clear();
+            Shiba = null;
         }
     }
 }

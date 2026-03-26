@@ -4,106 +4,104 @@ using System.Collections;
 
 namespace ShibaHomeJam.Core
 {
-    public enum ShibaState
-    {
-        Idle,
-        Moving,
-        Arrived,
-        Caught
-    }
-
+    /// <summary>
+    /// Shiba auto-moves toward Home every moveInterval seconds via BFS shortest path.
+    /// The player does NOT control Shiba.
+    /// </summary>
     public class ShibaController : MonoBehaviour
     {
-        [SerializeField] private float moveSpeed = 4f;
+        public int Col { get; private set; }
+        public int Row { get; private set; }
+        public bool Alive { get; private set; } = true;
+        public bool Arrived { get; private set; }
 
-        public Vector2Int GridPosition { get; private set; }
-        public ShibaState State { get; private set; } = ShibaState.Idle;
-
-        public event Action OnReachedGoal;
+        public event Action OnReachedHome;
         public event Action OnCaught;
 
-        public void Initialize(Vector2Int startPos)
+        private float moveInterval = 2f;
+        private float moveTimer;
+        private float animSpeed = 5f;
+        private bool animating;
+
+        public void Init(int col, int row)
         {
-            GridPosition = startPos;
-            transform.position = GridManager.Instance.GridToWorld(startPos);
-            GridManager.Instance.SetCell(startPos, CellType.Shiba, gameObject);
-            State = ShibaState.Idle;
+            Col = col;
+            Row = row;
+            Alive = true;
+            Arrived = false;
+            moveTimer = moveInterval; // first move after full interval
+            transform.position = GridManager.Instance.ToWorld(col, row);
+            GridManager.Instance.Set(col, row, CellType.Shiba);
         }
 
-        public bool TryMove(Vector2Int direction)
+        private void Update()
         {
-            if (State != ShibaState.Idle) return false;
+            if (!Alive || Arrived) return;
 
-            var target = GridPosition + direction;
-
-            if (!GridManager.Instance.IsInBounds(target)) return false;
-
-            var cellType = GridManager.Instance.GetCell(target);
-            if (cellType == CellType.Obstacle || cellType == CellType.Wall) return false;
-
-            if (cellType == CellType.Goal)
+            moveTimer -= Time.deltaTime;
+            if (moveTimer <= 0f)
             {
-                GridManager.Instance.SetCell(GridPosition, CellType.Empty);
-                GridPosition = target;
-                StartCoroutine(AnimateMove(target, () =>
-                {
-                    State = ShibaState.Arrived;
-                    OnReachedGoal?.Invoke();
-                }));
-                return true;
-            }
-
-            if (cellType == CellType.Enemy)
-            {
-                State = ShibaState.Caught;
-                OnCaught?.Invoke();
-                return false;
-            }
-
-            GridManager.Instance.MoveOccupant(GridPosition, target);
-            GridPosition = target;
-            StartCoroutine(AnimateMove(target, () => State = ShibaState.Idle));
-            return true;
-        }
-
-        public void AutoMove()
-        {
-            if (State != ShibaState.Idle) return;
-
-            // 柴犬は基本的に右（ゴール方向）に進もうとする
-            Vector2Int[] priorities = {
-                Vector2Int.right,
-                Vector2Int.up,
-                Vector2Int.down,
-                Vector2Int.left
-            };
-
-            foreach (var dir in priorities)
-            {
-                if (TryMove(dir)) return;
+                moveTimer = moveInterval;
+                TryStep();
             }
         }
 
-        public void SetCaught()
+        private void TryStep()
         {
-            State = ShibaState.Caught;
+            var gm = GridManager.Instance;
+            var home = GameManager.Instance.HomeCol;
+            var homeR = GameManager.Instance.HomeRow;
+
+            var path = gm.FindPath(Col, Row, home, homeR);
+            if (path == null || path.Count == 0) return; // no path, wait
+
+            var next = path[0];
+            int nc = next.x, nr = next.y;
+
+            // Check if enemy is there → caught
+            if (gm.Get(nc, nr) == CellType.Enemy)
+            {
+                Die();
+                return;
+            }
+
+            gm.Clear(Col, Row);
+            Col = nc;
+            Row = nr;
+
+            // Check if we reached Home
+            if (Col == home && Row == homeR)
+            {
+                Arrived = true;
+                Debug.Log("LEVEL CLEAR");
+                OnReachedHome?.Invoke();
+            }
+            else
+            {
+                gm.Set(Col, Row, CellType.Shiba);
+            }
+
+            Debug.Log($"Shiba moved to ({Col},{Row})");
+            StartCoroutine(AnimateTo(gm.ToWorld(Col, Row)));
+        }
+
+        public void Die()
+        {
+            Alive = false;
+            Debug.Log("GAME OVER");
             OnCaught?.Invoke();
         }
 
-        private IEnumerator AnimateMove(Vector2Int target, Action onComplete)
+        private IEnumerator AnimateTo(Vector3 target)
         {
-            State = ShibaState.Moving;
-            var targetWorld = GridManager.Instance.GridToWorld(target);
-
-            while (Vector3.Distance(transform.position, targetWorld) > 0.01f)
+            animating = true;
+            while (Vector3.Distance(transform.position, target) > 0.01f)
             {
-                transform.position = Vector3.MoveTowards(
-                    transform.position, targetWorld, moveSpeed * Time.deltaTime);
+                transform.position = Vector3.MoveTowards(transform.position, target, animSpeed * Time.deltaTime);
                 yield return null;
             }
-
-            transform.position = targetWorld;
-            onComplete?.Invoke();
+            transform.position = target;
+            animating = false;
         }
     }
 }

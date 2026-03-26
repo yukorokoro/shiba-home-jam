@@ -3,61 +3,69 @@ using System.Collections;
 
 namespace ShibaHomeJam.Core
 {
+    /// <summary>
+    /// The ONLY thing the player controls.
+    /// Player clicks/taps an obstacle, then swipes a direction → it slides
+    /// in that direction until hitting a wall or another non-empty cell.
+    /// </summary>
     public class ObstacleController : MonoBehaviour
     {
-        [SerializeField] private float slideSpeed = 8f;
+        public int Col { get; private set; }
+        public int Row { get; private set; }
+        public bool Sliding { get; private set; }
 
-        public Vector2Int GridPosition { get; private set; }
-        public bool IsSliding { get; private set; }
+        private float slideSpeed = 12f;
 
-        public void Initialize(Vector2Int pos)
+        public void Init(int col, int row)
         {
-            GridPosition = pos;
-            transform.position = GridManager.Instance.GridToWorld(pos);
-            GridManager.Instance.SetCell(pos, CellType.Obstacle, gameObject);
+            Col = col;
+            Row = row;
+            transform.position = GridManager.Instance.ToWorld(col, row);
+            GridManager.Instance.Set(col, row, CellType.Obstacle);
         }
 
-        public bool TrySlide(Vector2Int direction)
+        /// <summary>
+        /// Slide in direction (dc, dr) until blocked. Returns true if it moved at all.
+        /// </summary>
+        public bool TrySlide(int dc, int dr)
         {
-            if (IsSliding) return false;
+            if (Sliding) return false;
 
-            var target = GridPosition + direction;
+            var gm = GridManager.Instance;
+            int destCol = Col, destRow = Row;
 
-            // 障害物は空きマスにだけスライドできる
-            if (!GridManager.Instance.IsEmpty(target)) return false;
+            // Slide until hitting something
+            while (true)
+            {
+                int nc = destCol + dc, nr = destRow + dr;
+                if (!gm.InBounds(nc, nr)) break;
+                if (gm.Get(nc, nr) != CellType.Empty) break;
+                destCol = nc;
+                destRow = nr;
+            }
 
-            // 1マスだけスライド（壁までスライドではなく、1マスずつ制御）
-            GridManager.Instance.MoveOccupant(GridPosition, target);
-            GridPosition = target;
-            StartCoroutine(AnimateSlide(target));
+            if (destCol == Col && destRow == Row) return false; // didn't move
+
+            gm.Clear(Col, Row);
+            Col = destCol;
+            Row = destRow;
+            gm.Set(Col, Row, CellType.Obstacle);
+
+            Debug.Log($"Obstacle slid to ({Col},{Row})");
+            StartCoroutine(AnimateTo(gm.ToWorld(Col, Row)));
             return true;
         }
 
-        public static Vector2Int? DetectSwipeDirection(Vector2 startScreen, Vector2 endScreen, float minDistance = 15f)
+        private IEnumerator AnimateTo(Vector3 target)
         {
-            var delta = endScreen - startScreen;
-            if (delta.magnitude < minDistance) return null;
-
-            if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-                return delta.x > 0 ? Vector2Int.right : Vector2Int.left;
-            else
-                return delta.y > 0 ? Vector2Int.up : Vector2Int.down;
-        }
-
-        private IEnumerator AnimateSlide(Vector2Int target)
-        {
-            IsSliding = true;
-            var targetWorld = GridManager.Instance.GridToWorld(target);
-
-            while (Vector3.Distance(transform.position, targetWorld) > 0.01f)
+            Sliding = true;
+            while (Vector3.Distance(transform.position, target) > 0.01f)
             {
-                transform.position = Vector3.MoveTowards(
-                    transform.position, targetWorld, slideSpeed * Time.deltaTime);
+                transform.position = Vector3.MoveTowards(transform.position, target, slideSpeed * Time.deltaTime);
                 yield return null;
             }
-
-            transform.position = targetWorld;
-            IsSliding = false;
+            transform.position = target;
+            Sliding = false;
         }
     }
 }
