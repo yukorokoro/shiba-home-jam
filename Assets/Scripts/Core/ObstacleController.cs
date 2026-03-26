@@ -10,14 +10,11 @@ namespace ShibaHomeJam.Core
         public Vector2Int GridPosition { get; private set; }
         public bool IsSliding { get; private set; }
 
-        private Camera mainCamera;
-
         public void Initialize(Vector2Int pos)
         {
             GridPosition = pos;
             transform.position = GridManager.Instance.GridToWorld(pos);
             GridManager.Instance.SetCell(pos, CellType.Obstacle, gameObject);
-            mainCamera = Camera.main;
         }
 
         public bool TrySlide(Vector2Int direction)
@@ -29,25 +26,14 @@ namespace ShibaHomeJam.Core
             // 障害物は空きマスにだけスライドできる
             if (!GridManager.Instance.IsEmpty(target)) return false;
 
-            // スライド先を探索（壁や他のオブジェクトにぶつかるまで滑る）
-            var slideTarget = GridPosition;
-            var next = GridPosition + direction;
-
-            while (GridManager.Instance.IsEmpty(next))
-            {
-                slideTarget = next;
-                next += direction;
-            }
-
-            if (slideTarget == GridPosition) return false;
-
-            GridManager.Instance.MoveOccupant(GridPosition, slideTarget);
-            GridPosition = slideTarget;
-            StartCoroutine(AnimateSlide(slideTarget));
+            // 1マスだけスライド（壁までスライドではなく、1マスずつ制御）
+            GridManager.Instance.MoveOccupant(GridPosition, target);
+            GridPosition = target;
+            StartCoroutine(AnimateSlide(target));
             return true;
         }
 
-        public static Vector2Int? DetectSwipeDirection(Vector2 startScreen, Vector2 endScreen, float minDistance = 30f)
+        public static Vector2Int? DetectSwipeDirection(Vector2 startScreen, Vector2 endScreen, float minDistance = 15f)
         {
             var delta = endScreen - startScreen;
             if (delta.magnitude < minDistance) return null;
@@ -56,17 +42,6 @@ namespace ShibaHomeJam.Core
                 return delta.x > 0 ? Vector2Int.right : Vector2Int.left;
             else
                 return delta.y > 0 ? Vector2Int.up : Vector2Int.down;
-        }
-
-        public ObstacleController RaycastObstacle(Vector2 screenPos)
-        {
-            if (mainCamera == null) mainCamera = Camera.main;
-
-            var ray = mainCamera.ScreenPointToRay(screenPos);
-            if (Physics.Raycast(ray, out var hit))
-                return hit.collider.GetComponent<ObstacleController>();
-
-            return null;
         }
 
         private IEnumerator AnimateSlide(Vector2Int target)
