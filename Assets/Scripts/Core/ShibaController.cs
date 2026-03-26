@@ -43,10 +43,6 @@ namespace ShibaHomeJam.Core
             }
         }
 
-        /// <summary>
-        /// Called by GameManager after an obstacle moves.
-        /// Immediately recalculates path and takes one step if possible.
-        /// </summary>
         public void RecalculatePath()
         {
             if (!Alive || Arrived || animating) return;
@@ -61,29 +57,96 @@ namespace ShibaHomeJam.Core
             int homeC = GameManager.Instance.HomeCol;
             int homeR = GameManager.Instance.HomeRow;
 
-            var path = gm.FindPath(Col, Row, homeC, homeR);
+            // Find enemy position
+            int enemyCol = -1, enemyRow = -1;
+            for (int c = 0; c < gm.Cols; c++)
+                for (int r = 0; r < gm.Rows; r++)
+                    if (gm.Get(c, r) == CellType.Enemy) { enemyCol = c; enemyRow = r; }
 
-            if (path == null || path.Count == 0)
+            int enemyDist = (enemyCol >= 0)
+                ? GridManager.Manhattan(Col, Row, enemyCol, enemyRow) : 999;
+
+            // Priority 1: Safe path to Home (avoids obstacles and enemy)
+            var safePath = gm.FindPath(Col, Row, homeC, homeR,
+                CellType.Obstacle, CellType.Enemy);
+
+            if (safePath != null && safePath.Count > 0)
             {
-                Debug.Log("Shiba: path blocked, waiting");
+                var next = safePath[0];
+                Debug.Log($"Shiba: path found, moving to ({next.x},{next.y})");
+                MoveTo(next.x, next.y, homeC, homeR);
                 return;
             }
 
-            var next = path[0];
-            int nc = next.x, nr = next.y;
-
-            // Check if enemy is on the next cell
-            if (gm.Get(nc, nr) == CellType.Enemy)
+            // Priority 2: Enemy within 2 cells — escape (move away from enemy)
+            if (enemyDist <= 2 && enemyCol >= 0)
             {
-                Die();
+                var escapeCell = FindEscapeCell(enemyCol, enemyRow);
+                if (escapeCell.HasValue)
+                {
+                    Debug.Log($"Shiba: escaping enemy, moving to ({escapeCell.Value.x},{escapeCell.Value.y})");
+                    MoveTo(escapeCell.Value.x, escapeCell.Value.y, homeC, homeR);
+                    return;
+                }
+            }
+
+            // Priority 3: Path to Home ignoring enemy (risky but better than stuck)
+            var riskyPath = gm.FindPath(Col, Row, homeC, homeR, CellType.Obstacle);
+            if (riskyPath != null && riskyPath.Count > 0)
+            {
+                var next = riskyPath[0];
+                // Don't step directly onto enemy
+                if (gm.Get(next.x, next.y) == CellType.Enemy)
+                {
+                    Debug.Log("Shiba: path blocked by enemy, waiting");
+                    return;
+                }
+                Debug.Log($"Shiba: risky path, moving to ({next.x},{next.y})");
+                MoveTo(next.x, next.y, homeC, homeR);
                 return;
             }
 
+            // Completely stuck
+            Debug.Log("Shiba: completely surrounded, waiting");
+        }
+
+        /// <summary>
+        /// Escape: find adjacent walkable cell that maximizes distance from enemy.
+        /// </summary>
+        private Vector2Int? FindEscapeCell(int enemyCol, int enemyRow)
+        {
+            var gm = GridManager.Instance;
+            var neighbors = gm.GetWalkableNeighbors(Col, Row,
+                CellType.Obstacle, CellType.Enemy);
+
+            if (neighbors.Count == 0) return null;
+
+            Vector2Int best = neighbors[0];
+            int bestDist = GridManager.Manhattan(best.x, best.y, enemyCol, enemyRow);
+
+            for (int i = 1; i < neighbors.Count; i++)
+            {
+                int dist = GridManager.Manhattan(neighbors[i].x, neighbors[i].y, enemyCol, enemyRow);
+                if (dist > bestDist)
+                {
+                    bestDist = dist;
+                    best = neighbors[i];
+                }
+            }
+
+            // Only escape if it actually increases distance from enemy
+            int currentDist = GridManager.Manhattan(Col, Row, enemyCol, enemyRow);
+            if (bestDist <= currentDist) return null;
+
+            return best;
+        }
+
+        private void MoveTo(int nc, int nr, int homeC, int homeR)
+        {
+            var gm = GridManager.Instance;
             gm.Clear(Col, Row);
             Col = nc;
             Row = nr;
-
-            Debug.Log($"Shiba: path found, moving to ({Col},{Row})");
 
             if (Col == homeC && Row == homeR)
             {

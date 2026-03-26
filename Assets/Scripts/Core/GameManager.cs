@@ -194,9 +194,12 @@ namespace ShibaHomeJam.Core
             foreach (var obs in obstacles)
                 obs.OnSlideComplete -= OnObstacleSlideComplete;
 
-            // Shiba recalculates path after obstacle moves
+            // Both Shiba and Enemy recalculate paths after obstacle moves
             if (Shiba != null && Shiba.Alive && !Shiba.Arrived)
                 Shiba.RecalculatePath();
+
+            foreach (var enemy in enemies)
+                enemy.RecalculatePath();
         }
 
         // ===================== State =====================

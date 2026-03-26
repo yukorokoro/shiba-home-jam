@@ -12,11 +12,6 @@ namespace ShibaHomeJam.Core
         Home
     }
 
-    /// <summary>
-    /// Pure data grid. No visuals, no spawning. Just tracks what is in each cell.
-    /// Coordinate system: (col, row) where (0,0) is top-left.
-    /// World mapping: col → +X, row → -Z (so row 0 is at top of screen).
-    /// </summary>
     public class GridManager : MonoBehaviour
     {
         public static GridManager Instance { get; private set; }
@@ -24,7 +19,7 @@ namespace ShibaHomeJam.Core
         public int Cols { get; private set; }
         public int Rows { get; private set; }
 
-        private CellType[,] grid; // [col, row]
+        private CellType[,] grid;
 
         private void Awake()
         {
@@ -39,8 +34,6 @@ namespace ShibaHomeJam.Core
             grid = new CellType[cols, rows];
         }
 
-        // ---- query ----
-
         public bool InBounds(int col, int row)
         {
             return col >= 0 && col < Cols && row >= 0 && row < Rows;
@@ -48,18 +41,9 @@ namespace ShibaHomeJam.Core
 
         public CellType Get(int col, int row)
         {
-            if (!InBounds(col, row)) return CellType.Obstacle; // out of bounds acts as wall
+            if (!InBounds(col, row)) return CellType.Obstacle;
             return grid[col, row];
         }
-
-        public bool IsWalkable(int col, int row)
-        {
-            if (!InBounds(col, row)) return false;
-            var c = grid[col, row];
-            return c == CellType.Empty || c == CellType.Home;
-        }
-
-        // ---- mutate ----
 
         public void Set(int col, int row, CellType type)
         {
@@ -71,9 +55,6 @@ namespace ShibaHomeJam.Core
             Set(col, row, CellType.Empty);
         }
 
-        // ---- coordinate conversion ----
-        // World: X = col, Y = 0, Z = -(row)  so row 0 is at Z=0 (top of screen with top-down cam)
-
         public Vector3 ToWorld(int col, int row)
         {
             return new Vector3(col, 0f, -row);
@@ -84,12 +65,20 @@ namespace ShibaHomeJam.Core
             return (Mathf.RoundToInt(world.x), Mathf.RoundToInt(-world.z));
         }
 
-        // ---- pathfinding (BFS, used by Shiba) ----
+        private static readonly Vector2Int[] Dirs = {
+            new Vector2Int(1, 0), new Vector2Int(-1, 0),
+            new Vector2Int(0, 1), new Vector2Int(0, -1)
+        };
 
-        public List<Vector2Int> FindPath(int fromCol, int fromRow, int toCol, int toRow)
+        /// <summary>
+        /// BFS pathfinding. blockedTypes specifies which CellTypes are impassable.
+        /// </summary>
+        public List<Vector2Int> FindPath(int fromCol, int fromRow, int toCol, int toRow,
+            params CellType[] blockedTypes)
         {
             if (fromCol == toCol && fromRow == toRow) return new List<Vector2Int>();
 
+            var blocked = new HashSet<CellType>(blockedTypes);
             var visited = new bool[Cols, Rows];
             var parent = new Dictionary<Vector2Int, Vector2Int>();
             var queue = new Queue<Vector2Int>();
@@ -100,24 +89,18 @@ namespace ShibaHomeJam.Core
             queue.Enqueue(start);
             visited[fromCol, fromRow] = true;
 
-            Vector2Int[] dirs = {
-                new Vector2Int(1, 0), new Vector2Int(-1, 0),
-                new Vector2Int(0, 1), new Vector2Int(0, -1)
-            };
-
             while (queue.Count > 0)
             {
                 var current = queue.Dequeue();
 
-                foreach (var d in dirs)
+                foreach (var d in Dirs)
                 {
                     var next = current + d;
                     if (!InBounds(next.x, next.y)) continue;
                     if (visited[next.x, next.y]) continue;
 
                     var cell = grid[next.x, next.y];
-                    // Can walk through Empty or Home; blocked by Obstacle and Enemy
-                    if (cell == CellType.Obstacle || cell == CellType.Enemy) continue;
+                    if (blocked.Contains(cell)) continue;
 
                     visited[next.x, next.y] = true;
                     parent[next] = current;
@@ -125,7 +108,6 @@ namespace ShibaHomeJam.Core
 
                     if (next == goal)
                     {
-                        // reconstruct
                         var path = new List<Vector2Int>();
                         var node = goal;
                         while (node != start)
@@ -139,7 +121,30 @@ namespace ShibaHomeJam.Core
                 }
             }
 
-            return null; // no path
+            return null;
+        }
+
+        /// <summary>
+        /// Get all walkable neighbor cells (not in blockedTypes).
+        /// </summary>
+        public List<Vector2Int> GetWalkableNeighbors(int col, int row, params CellType[] blockedTypes)
+        {
+            var blocked = new HashSet<CellType>(blockedTypes);
+            var result = new List<Vector2Int>();
+
+            foreach (var d in Dirs)
+            {
+                int nc = col + d.x, nr = row + d.y;
+                if (!InBounds(nc, nr)) continue;
+                if (blocked.Contains(grid[nc, nr])) continue;
+                result.Add(new Vector2Int(nc, nr));
+            }
+            return result;
+        }
+
+        public static int Manhattan(int c1, int r1, int c2, int r2)
+        {
+            return Mathf.Abs(c1 - c2) + Mathf.Abs(r1 - r2);
         }
     }
 }
