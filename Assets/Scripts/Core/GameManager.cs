@@ -34,6 +34,7 @@ namespace ShibaHomeJam.Core
         private ShibaController shiba;
         private List<ObstacleController> obstacles = new List<ObstacleController>();
         private List<EnemyController> enemies = new List<EnemyController>();
+        private List<GameObject> spawnedObjects = new List<GameObject>();
         private LevelData currentLevelData;
 
         // 入力用
@@ -92,23 +93,29 @@ namespace ShibaHomeJam.Core
 
         private void SpawnEntities()
         {
+            // グリッド床面を生成
+            SpawnGridFloor();
+
             // ゴール配置
+            var goalPos = currentLevelData.goal.ToVector2Int();
             if (goalPrefab != null)
             {
-                var goalPos = currentLevelData.goal.ToVector2Int();
                 var goalObj = Instantiate(goalPrefab, GridManager.Instance.GridToWorld(goalPos), Quaternion.identity);
                 GridManager.Instance.SetCell(goalPos, CellType.Goal, goalObj);
             }
             else
             {
-                GridManager.Instance.SetCell(currentLevelData.goal.ToVector2Int(), CellType.Goal);
+                var goalObj = CreatePlaceholder("Goal", new Color(0.2f, 0.8f, 0.2f), goalPos);
+                goalObj.transform.localScale = new Vector3(0.9f, 0.1f, 0.9f);
+                goalObj.transform.position += Vector3.up * (-0.4f);
+                GridManager.Instance.SetCell(goalPos, CellType.Goal, goalObj);
             }
 
             // 柴犬配置
             var shibaPos = currentLevelData.shiba.ToVector2Int();
             var shibaObj = shibaPrefab != null
                 ? Instantiate(shibaPrefab, GridManager.Instance.GridToWorld(shibaPos), Quaternion.identity)
-                : CreatePlaceholder("Shiba", Color.yellow, shibaPos);
+                : CreatePlaceholder("Shiba", new Color(0.9f, 0.7f, 0.3f), shibaPos);
             shiba = shibaObj.GetComponent<ShibaController>();
             if (shiba == null) shiba = shibaObj.AddComponent<ShibaController>();
             shiba.Initialize(shibaPos);
@@ -121,7 +128,7 @@ namespace ShibaHomeJam.Core
                 var pos = obsData.ToVector2Int();
                 var obj = obstaclePrefab != null
                     ? Instantiate(obstaclePrefab, GridManager.Instance.GridToWorld(pos), Quaternion.identity)
-                    : CreatePlaceholder("Obstacle", Color.gray, pos);
+                    : CreatePlaceholder("Obstacle", new Color(0.45f, 0.35f, 0.25f), pos);
                 var obs = obj.GetComponent<ObstacleController>();
                 if (obs == null) obs = obj.AddComponent<ObstacleController>();
                 obs.Initialize(pos);
@@ -133,7 +140,7 @@ namespace ShibaHomeJam.Core
             {
                 var pos = enemyData.position.ToVector2Int();
                 var prefab = enemyData.type == "thief" ? thiefPrefab : catPrefab;
-                var color = enemyData.type == "thief" ? Color.blue : Color.red;
+                var color = enemyData.type == "thief" ? new Color(0.3f, 0.3f, 0.7f) : new Color(0.8f, 0.2f, 0.2f);
                 var obj = prefab != null
                     ? Instantiate(prefab, GridManager.Instance.GridToWorld(pos), Quaternion.identity)
                     : CreatePlaceholder($"Enemy_{enemyData.type}", color, pos);
@@ -142,6 +149,9 @@ namespace ShibaHomeJam.Core
                 enemy.Initialize(pos, enemyData.ToEnemyType());
                 enemies.Add(enemy);
             }
+
+            // カメラをグリッド中心に合わせる
+            FitCamera();
         }
 
         private void HandleInput()
@@ -234,8 +244,10 @@ namespace ShibaHomeJam.Core
 
             foreach (var obs in obstacles) if (obs != null) Destroy(obs.gameObject);
             foreach (var enemy in enemies) if (enemy != null) Destroy(enemy.gameObject);
+            foreach (var obj in spawnedObjects) if (obj != null) Destroy(obj);
             obstacles.Clear();
             enemies.Clear();
+            spawnedObjects.Clear();
 
             // ゴールオブジェクト削除
             if (currentLevelData != null)
@@ -245,11 +257,57 @@ namespace ShibaHomeJam.Core
             }
         }
 
+        private void FitCamera()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+
+            var gm = GridManager.Instance;
+            // グリッド中心を計算
+            float cx = (gm.Width - 1) * 0.5f;
+            float cz = (gm.Height - 1) * 0.5f;
+
+            // 真上から見下ろし（少し斜め）
+            cam.transform.position = new Vector3(cx, 10f, cz - 3f);
+            cam.transform.rotation = Quaternion.Euler(65f, 0f, 0f);
+            cam.orthographic = true;
+            cam.orthographicSize = Mathf.Max(gm.Width, gm.Height) * 0.7f;
+        }
+
+        private void SpawnGridFloor()
+        {
+            var gm = GridManager.Instance;
+
+            for (int x = 0; x < gm.Width; x++)
+            {
+                for (int y = 0; y < gm.Height; y++)
+                {
+                    var tile = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    tile.name = $"Tile_{x}_{y}";
+                    tile.transform.position = new Vector3(x, -0.5f, y);
+                    tile.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                    tile.transform.localScale = new Vector3(0.95f, 0.95f, 1f);
+
+                    var renderer = tile.GetComponent<Renderer>();
+                    bool dark = (x + y) % 2 == 0;
+                    renderer.material.color = dark
+                        ? new Color(0.75f, 0.85f, 0.65f)
+                        : new Color(0.82f, 0.9f, 0.72f);
+
+                    // タイルにColliderは不要（Raycastの邪魔になる）
+                    Destroy(tile.GetComponent<Collider>());
+
+                    spawnedObjects.Add(tile);
+                }
+            }
+        }
+
         private GameObject CreatePlaceholder(string name, Color color, Vector2Int pos)
         {
             var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             obj.name = name;
             obj.transform.position = GridManager.Instance.GridToWorld(pos);
+            obj.transform.localScale = new Vector3(0.8f, 0.8f, 0.8f);
             var renderer = obj.GetComponent<Renderer>();
             renderer.material.color = color;
             return obj;
