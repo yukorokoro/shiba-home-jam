@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using System;
 using System.Collections.Generic;
 
@@ -35,9 +36,10 @@ namespace ShibaHomeJam.Core
         private List<EnemyController> enemies = new List<EnemyController>();
         private LevelData currentLevelData;
 
-        // タッチ入力用
+        // 入力用
         private Vector2 touchStart;
         private ObstacleController selectedObstacle;
+        private bool pressing;
 
         private void Awake()
         {
@@ -144,44 +146,22 @@ namespace ShibaHomeJam.Core
 
         private void HandleInput()
         {
-#if UNITY_EDITOR || UNITY_STANDALONE
-            HandleMouseInput();
-#else
-            HandleTouchInput();
-#endif
-        }
+            var pointer = Pointer.current;
+            if (pointer == null) return;
 
-        private void HandleMouseInput()
-        {
-            if (Input.GetMouseButtonDown(0))
-            {
-                touchStart = Input.mousePosition;
-                selectedObstacle = RaycastObstacle(Input.mousePosition);
-            }
-            else if (Input.GetMouseButtonUp(0) && selectedObstacle != null)
-            {
-                var dir = ObstacleController.DetectSwipeDirection(touchStart, Input.mousePosition);
-                if (dir.HasValue && selectedObstacle.TrySlide(dir.Value))
-                {
-                    AdvanceTurn();
-                }
-                selectedObstacle = null;
-            }
-        }
+            var press = pointer.press;
+            var position = pointer.position.ReadValue();
 
-        private void HandleTouchInput()
-        {
-            if (Input.touchCount == 0) return;
-            var touch = Input.GetTouch(0);
-
-            if (touch.phase == TouchPhase.Began)
+            if (press.wasPressedThisFrame)
             {
-                touchStart = touch.position;
-                selectedObstacle = RaycastObstacle(touch.position);
+                pressing = true;
+                touchStart = position;
+                selectedObstacle = RaycastObstacle(position);
             }
-            else if (touch.phase == TouchPhase.Ended && selectedObstacle != null)
+            else if (press.wasReleasedThisFrame && pressing && selectedObstacle != null)
             {
-                var dir = ObstacleController.DetectSwipeDirection(touchStart, touch.position);
+                pressing = false;
+                var dir = ObstacleController.DetectSwipeDirection(touchStart, position);
                 if (dir.HasValue && selectedObstacle.TrySlide(dir.Value))
                 {
                     AdvanceTurn();
