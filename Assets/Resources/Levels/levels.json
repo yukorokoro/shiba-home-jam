@@ -50,39 +50,33 @@
       "level": 3,
       "width": 6,
       "height": 6,
-      "shiba": { "x": 0, "y": 0 },
-      "goal": { "x": 5, "y": 5 },
+      "shiba": { "x": 0, "y": 3 },
+      "goal": { "x": 5, "y": 3 },
       "route": [
-        { "x": 0, "y": 0 },
-        { "x": 0, "y": 1 },
-        { "x": 0, "y": 2 },
-        { "x": 1, "y": 2 },
-        { "x": 2, "y": 2 },
-        { "x": 3, "y": 2 },
-        { "x": 4, "y": 2 },
-        { "x": 5, "y": 2 },
-        { "x": 5, "y": 3 },
-        { "x": 5, "y": 4 },
-        { "x": 5, "y": 5 }
+        { "x": 0, "y": 3 },
+        { "x": 1, "y": 3 },
+        { "x": 2, "y": 3 },
+        { "x": 4, "y": 3 },
+        { "x": 5, "y": 3 }
       ],
       "branches": [
         {
-          "branchAt": { "x": 2, "y": 2 },
+          "branchAt": { "x": 2, "y": 3 },
           "primaryRoute": [
+            { "x": 3, "y": 3 },
+            { "x": 4, "y": 3 }
+          ],
+          "alternateRoute": [
+            { "x": 2, "y": 2 },
             { "x": 3, "y": 2 },
             { "x": 4, "y": 2 },
-            { "x": 5, "y": 2 }
-          ],
-          "deadEndRoute": [
-            { "x": 2, "y": 3 },
-            { "x": 2, "y": 4 },
-            { "x": 2, "y": 5 }
+            { "x": 4, "y": 3 }
           ]
         }
       ],
       "obstacles": [
-        { "x": 3, "y": 2, "obstacleType": "movable" },
-        { "x": 2, "y": 3, "obstacleType": "fixed" }
+        { "x": 3, "y": 3, "obstacleType": "fixed" },
+        { "x": 3, "y": 2, "obstacleType": "movable" }
       ],
       "enemies": [],
       "timeLimit": 40

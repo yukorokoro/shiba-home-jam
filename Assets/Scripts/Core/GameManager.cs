@@ -123,23 +123,26 @@ namespace ShibaHomeJam.Core
             {
                 foreach (var b in data.branches)
                 {
-                    // Primary branch: yellow
-                    var primary = new Vector2Int[b.primaryRoute.Length];
-                    for (int i = 0; i < b.primaryRoute.Length; i++)
-                        primary[i] = new Vector2Int(b.primaryRoute[i].x, b.primaryRoute[i].y);
-                    SpawnRouteMarkers(primary, new Color(1f, 0.85f, 0.2f, 0.8f));
-
-                    // Dead end branch: red with X at end
-                    var deadEnd = new Vector2Int[b.deadEndRoute.Length];
-                    for (int i = 0; i < b.deadEndRoute.Length; i++)
-                        deadEnd[i] = new Vector2Int(b.deadEndRoute[i].x, b.deadEndRoute[i].y);
-                    SpawnRouteMarkers(deadEnd, new Color(0.9f, 0.2f, 0.2f, 0.6f));
-
-                    // X marker at the blocked cell (last cell of dead end, or where fixed obstacle is)
-                    if (deadEnd.Length > 0)
+                    // Primary (shortest) route: RED — blocked by fixed obstacle
+                    if (b.primaryRoute != null)
                     {
-                        var blocked = deadEnd[0]; // first cell is where the fixed obstacle blocks
-                        SpawnBlockedMarker(blocked.x, blocked.y);
+                        var primary = new Vector2Int[b.primaryRoute.Length];
+                        for (int i = 0; i < b.primaryRoute.Length; i++)
+                            primary[i] = new Vector2Int(b.primaryRoute[i].x, b.primaryRoute[i].y);
+                        SpawnRouteMarkers(primary, new Color(0.9f, 0.2f, 0.2f, 0.6f));
+
+                        // X marker on the fixed obstacle blocking this route
+                        if (primary.Length > 0)
+                            SpawnBlockedMarker(primary[0].x, primary[0].y);
+                    }
+
+                    // Alternate route: YELLOW — the actual detour Shiba takes
+                    if (b.alternateRoute != null)
+                    {
+                        var alt = new Vector2Int[b.alternateRoute.Length];
+                        for (int i = 0; i < b.alternateRoute.Length; i++)
+                            alt[i] = new Vector2Int(b.alternateRoute[i].x, b.alternateRoute[i].y);
+                        SpawnRouteMarkers(alt, new Color(1f, 0.85f, 0.2f, 0.8f));
                     }
                 }
             }

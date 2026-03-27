@@ -12,7 +12,7 @@ namespace ShibaHomeJam.Core
         public Position shiba;
         public Position goal;
         public Position[] route;
-        public BranchData[] branches; // optional branch points
+        public BranchData[] branches;
         public ObstacleData[] obstacles;
         public EnemyData[] enemies;
         public int timeLimit;
@@ -26,16 +26,16 @@ namespace ShibaHomeJam.Core
     }
 
     /// <summary>
-    /// A branch point in Shiba's route.
-    /// When Shiba reaches branchAt, it tries primaryRoute first.
-    /// If blocked, it tries deadEndRoute (which should be permanently blocked by a fixed obstacle).
+    /// At branchAt, Shiba tries primaryRoute first (shortest path).
+    /// If primary is blocked (by fixed obstacle): takes alternateRoute instead.
+    /// If alternate is blocked (by movable obstacle): waits for player.
     /// </summary>
     [Serializable]
     public class BranchData
     {
-        public Position branchAt;       // the cell where branching occurs (must be on main route)
-        public Position[] primaryRoute; // correct path (may be blocked by movable obstacle)
-        public Position[] deadEndRoute; // wrong path (blocked by fixed obstacle)
+        public Position branchAt;
+        public Position[] primaryRoute;   // shortest path (may be blocked by fixed obstacle)
+        public Position[] alternateRoute; // detour path (may be blocked by movable obstacle)
     }
 
     [Serializable]

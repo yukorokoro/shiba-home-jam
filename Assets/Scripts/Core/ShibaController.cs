@@ -7,8 +7,8 @@ namespace ShibaHomeJam.Core
 {
     /// <summary>
     /// Shiba moves along a pre-defined route with optional branch points.
-    /// At a branch point, Shiba tries the primary branch first.
-    /// If blocked, stays on main route (doesn't take dead end).
+    /// At a branch: tries primary (shortest) first → if blocked by fixed obstacle,
+    /// takes alternate route → if alternate blocked by movable obstacle, waits for player.
     /// </summary>
     public class ShibaController : MonoBehaviour
     {
@@ -22,9 +22,8 @@ namespace ShibaHomeJam.Core
         private Vector2Int[] route;
         private int routeIndex;
 
-        // Branch data: branchAt cell → (primaryRoute, deadEndRoute)
         private Dictionary<Vector2Int, BranchInfo> branches = new Dictionary<Vector2Int, BranchInfo>();
-        private Vector2Int[] activeBranch; // if currently on a branch sub-route
+        private Vector2Int[] activeBranch;
         private int branchIndex;
 
         private float moveInterval = 1.5f;
@@ -35,7 +34,7 @@ namespace ShibaHomeJam.Core
         private struct BranchInfo
         {
             public Vector2Int[] primary;
-            public Vector2Int[] deadEnd;
+            public Vector2Int[] alternate;
         }
 
         public void Init(int col, int row, Vector2Int[] routeCells, BranchData[] branchData = null)
@@ -51,7 +50,6 @@ namespace ShibaHomeJam.Core
             transform.position = GridManager.Instance.ToWorld(col, row);
             GridManager.Instance.Set(col, row, CellType.Shiba);
 
-            // Parse branches
             branches.Clear();
             if (branchData != null)
             {
@@ -59,20 +57,25 @@ namespace ShibaHomeJam.Core
                 {
                     var key = new Vector2Int(b.branchAt.x, b.branchAt.y);
                     var info = new BranchInfo();
-                    info.primary = new Vector2Int[b.primaryRoute.Length];
-                    for (int i = 0; i < b.primaryRoute.Length; i++)
-                        info.primary[i] = new Vector2Int(b.primaryRoute[i].x, b.primaryRoute[i].y);
-                    info.deadEnd = new Vector2Int[b.deadEndRoute.Length];
-                    for (int i = 0; i < b.deadEndRoute.Length; i++)
-                        info.deadEnd[i] = new Vector2Int(b.deadEndRoute[i].x, b.deadEndRoute[i].y);
+                    info.primary = ConvertPositions(b.primaryRoute);
+                    info.alternate = ConvertPositions(b.alternateRoute);
                     branches[key] = info;
-                    Debug.Log($"Shiba: branch at ({key.x},{key.y}) — primary {info.primary.Length} cells, dead end {info.deadEnd.Length} cells");
+                    Debug.Log($"Shiba: branch at ({key.x},{key.y}) — primary {info.primary.Length} cells, alternate {info.alternate.Length} cells");
                 }
             }
 
             var sb = new System.Text.StringBuilder("Shiba route: ");
             foreach (var r in route) sb.Append($"({r.x},{r.y})→");
             Debug.Log(sb.ToString().TrimEnd('→'));
+        }
+
+        private Vector2Int[] ConvertPositions(Position[] positions)
+        {
+            if (positions == null) return new Vector2Int[0];
+            var result = new Vector2Int[positions.Length];
+            for (int i = 0; i < positions.Length; i++)
+                result[i] = new Vector2Int(positions[i].x, positions[i].y);
+            return result;
         }
 
         private void Update()
@@ -97,42 +100,63 @@ namespace ShibaHomeJam.Core
 
         private void TryStep()
         {
-            // If on a branch sub-route, continue it
             if (activeBranch != null)
             {
                 StepAlongArray(activeBranch, ref branchIndex, true);
                 return;
             }
 
-            // Main route
             if (routeIndex >= route.Length) return;
 
             var currentPos = new Vector2Int(Col, Row);
 
-            // Check if current cell is a branch point
+            // Check branch point
             if (branches.TryGetValue(currentPos, out var branchInfo))
             {
-                // Try primary branch first
-                var firstCell = branchInfo.primary[0];
-                var cell = GridManager.Instance.Get(firstCell.x, firstCell.y);
+                HandleBranch(branchInfo);
+                return;
+            }
 
-                if (cell != CellType.Obstacle)
+            StepAlongArray(route, ref routeIndex, false);
+        }
+
+        private void HandleBranch(BranchInfo info)
+        {
+            var gm = GridManager.Instance;
+
+            // 1. Try primary (shortest) route
+            if (info.primary.Length > 0)
+            {
+                var firstPrimary = info.primary[0];
+                if (gm.Get(firstPrimary.x, firstPrimary.y) != CellType.Obstacle)
                 {
-                    // Primary branch is open — take it
-                    Debug.Log($"Shiba: taking primary branch from ({Col},{Row})");
-                    activeBranch = branchInfo.primary;
+                    Debug.Log($"Shiba: primary path open, taking ({firstPrimary.x},{firstPrimary.y})");
+                    activeBranch = info.primary;
                     branchIndex = 0;
                     StepAlongArray(activeBranch, ref branchIndex, true);
                     return;
                 }
+                Debug.Log($"Shiba: primary path blocked at ({firstPrimary.x},{firstPrimary.y}) — trying alternate");
+            }
 
-                // Primary blocked — log and wait (dead end is permanently blocked by fixed obstacle)
-                Debug.Log($"Shiba: primary branch blocked at ({firstCell.x},{firstCell.y}), waiting for player");
+            // 2. Primary blocked → try alternate route
+            if (info.alternate.Length > 0)
+            {
+                var firstAlt = info.alternate[0];
+                if (gm.Get(firstAlt.x, firstAlt.y) != CellType.Obstacle)
+                {
+                    Debug.Log($"Shiba: taking alternate route via ({firstAlt.x},{firstAlt.y})");
+                    activeBranch = info.alternate;
+                    branchIndex = 0;
+                    StepAlongArray(activeBranch, ref branchIndex, true);
+                    return;
+                }
+                Debug.Log($"Shiba: alternate route blocked at ({firstAlt.x},{firstAlt.y}), waiting for player");
                 return;
             }
 
-            // Normal route step
-            StepAlongArray(route, ref routeIndex, false);
+            // 3. No alternate → stuck
+            Debug.Log("Shiba: all branches blocked, waiting");
         }
 
         private void StepAlongArray(Vector2Int[] path, ref int index, bool isBranch)
@@ -141,10 +165,8 @@ namespace ShibaHomeJam.Core
             {
                 if (isBranch)
                 {
-                    // Branch complete — resume main route from after the branch point
                     activeBranch = null;
                     Debug.Log("Shiba: branch complete, resuming main route");
-                    // Find where we are on the main route and advance past it
                     AdvanceMainRouteToCurrentPos();
                 }
                 return;
@@ -168,7 +190,6 @@ namespace ShibaHomeJam.Core
             string label = isBranch ? "branch" : "route";
             Debug.Log($"Shiba: {label} moving to ({Col},{Row}) [{index}/{path.Length}]");
 
-            // Check if reached Home
             if (Col == GameManager.Instance.HomeCol && Row == GameManager.Instance.HomeRow)
             {
                 Arrived = true;
@@ -185,8 +206,6 @@ namespace ShibaHomeJam.Core
 
         private void AdvanceMainRouteToCurrentPos()
         {
-            // After completing a branch, find our position in the main route
-            // and skip past cells we've already covered via the branch
             var currentPos = new Vector2Int(Col, Row);
             for (int i = routeIndex; i < route.Length; i++)
             {
@@ -197,7 +216,6 @@ namespace ShibaHomeJam.Core
                     return;
                 }
             }
-            // If branch endpoint isn't on main route, just continue from where we left off
             routeIndex++;
         }
 
