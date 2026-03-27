@@ -11,10 +11,11 @@ namespace ShibaHomeJam.Core
         public int height;
         public Position shiba;
         public Position goal;
-        public Position[] route; // ordered list of cells Shiba follows
+        public Position[] route;
+        public BranchData[] branches; // optional branch points
         public ObstacleData[] obstacles;
         public EnemyData[] enemies;
-        public int timeLimit; // seconds, 0 = no limit
+        public int timeLimit;
     }
 
     [Serializable]
@@ -24,12 +25,25 @@ namespace ShibaHomeJam.Core
         public int y;
     }
 
+    /// <summary>
+    /// A branch point in Shiba's route.
+    /// When Shiba reaches branchAt, it tries primaryRoute first.
+    /// If blocked, it tries deadEndRoute (which should be permanently blocked by a fixed obstacle).
+    /// </summary>
+    [Serializable]
+    public class BranchData
+    {
+        public Position branchAt;       // the cell where branching occurs (must be on main route)
+        public Position[] primaryRoute; // correct path (may be blocked by movable obstacle)
+        public Position[] deadEndRoute; // wrong path (blocked by fixed obstacle)
+    }
+
     [Serializable]
     public class ObstacleData
     {
         public int x;
         public int y;
-        public string obstacleType; // "movable" or "fixed"
+        public string obstacleType;
 
         public bool IsMovable => obstacleType == "movable";
     }

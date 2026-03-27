@@ -116,10 +116,36 @@ namespace ShibaHomeJam.Core
             for (int i = 0; i < data.route.Length; i++)
                 route[i] = new Vector2Int(data.route[i].x, data.route[i].y);
 
-            SpawnRouteMarkers(route);
+            SpawnRouteMarkers(route, new Color(1f, 0.75f, 0.3f, 0.8f)); // yellow-orange
+
+            // Branch visuals
+            if (data.branches != null)
+            {
+                foreach (var b in data.branches)
+                {
+                    // Primary branch: yellow
+                    var primary = new Vector2Int[b.primaryRoute.Length];
+                    for (int i = 0; i < b.primaryRoute.Length; i++)
+                        primary[i] = new Vector2Int(b.primaryRoute[i].x, b.primaryRoute[i].y);
+                    SpawnRouteMarkers(primary, new Color(1f, 0.85f, 0.2f, 0.8f));
+
+                    // Dead end branch: red with X at end
+                    var deadEnd = new Vector2Int[b.deadEndRoute.Length];
+                    for (int i = 0; i < b.deadEndRoute.Length; i++)
+                        deadEnd[i] = new Vector2Int(b.deadEndRoute[i].x, b.deadEndRoute[i].y);
+                    SpawnRouteMarkers(deadEnd, new Color(0.9f, 0.2f, 0.2f, 0.6f));
+
+                    // X marker at the blocked cell (last cell of dead end, or where fixed obstacle is)
+                    if (deadEnd.Length > 0)
+                    {
+                        var blocked = deadEnd[0]; // first cell is where the fixed obstacle blocks
+                        SpawnBlockedMarker(blocked.x, blocked.y);
+                    }
+                }
+            }
 
             // Shiba
-            Shiba = SpawnShiba(data.shiba.x, data.shiba.y, route);
+            Shiba = SpawnShiba(data.shiba.x, data.shiba.y, route, data.branches);
             Shiba.OnReachedHome += OnLevelClear;
 
             // Obstacles
@@ -455,7 +481,7 @@ namespace ShibaHomeJam.Core
 
         // ===================== Spawning =====================
 
-        private ShibaController SpawnShiba(int col, int row, Vector2Int[] route)
+        private ShibaController SpawnShiba(int col, int row, Vector2Int[] route, BranchData[] branches = null)
         {
             var obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             obj.name = "Shiba";
@@ -463,12 +489,29 @@ namespace ShibaHomeJam.Core
             obj.GetComponent<Renderer>().material.color = new Color(1f, 0.9f, 0.2f);
             Destroy(obj.GetComponent<Collider>());
             var sc = obj.AddComponent<ShibaController>();
-            sc.Init(col, row, route);
+            sc.Init(col, row, route, branches);
             allSpawned.Add(obj);
             return sc;
         }
 
-        private void SpawnRouteMarkers(Vector2Int[] route)
+        private void SpawnBlockedMarker(int col, int row)
+        {
+            var gm = GridManager.Instance;
+            // Red X using two crossed quads
+            for (int i = 0; i < 2; i++)
+            {
+                var x = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                x.name = $"BlockedX_{col}_{row}_{i}";
+                x.transform.position = gm.ToWorld(col, row) + Vector3.down * 0.4f;
+                x.transform.rotation = Quaternion.Euler(90f, i == 0 ? 45f : -45f, 0f);
+                x.transform.localScale = new Vector3(0.5f, 0.12f, 1f);
+                x.GetComponent<Renderer>().material.color = new Color(0.9f, 0.15f, 0.15f);
+                Destroy(x.GetComponent<Collider>());
+                allSpawned.Add(x);
+            }
+        }
+
+        private void SpawnRouteMarkers(Vector2Int[] route, Color color)
         {
             var gm = GridManager.Instance;
             for (int i = 0; i < route.Length; i++)
@@ -479,7 +522,7 @@ namespace ShibaHomeJam.Core
                 marker.name = $"Route_{i}";
                 marker.transform.position = gm.ToWorld(pos.x, pos.y) + Vector3.down * 0.45f;
                 marker.transform.localScale = new Vector3(0.3f, 0.02f, 0.3f);
-                marker.GetComponent<Renderer>().material.color = new Color(1f, 0.75f, 0.3f, 0.8f);
+                marker.GetComponent<Renderer>().material.color = color;
                 Destroy(marker.GetComponent<Collider>());
                 allSpawned.Add(marker);
 
@@ -500,7 +543,7 @@ namespace ShibaHomeJam.Core
                     else
                         arrow.transform.localScale = new Vector3(0.15f, 0.4f, 1f);
 
-                    arrow.GetComponent<Renderer>().material.color = new Color(1f, 0.75f, 0.3f, 0.6f);
+                    arrow.GetComponent<Renderer>().material.color = new Color(color.r, color.g, color.b, 0.6f);
                     Destroy(arrow.GetComponent<Collider>());
                     allSpawned.Add(arrow);
                 }
