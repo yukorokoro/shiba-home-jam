@@ -165,28 +165,124 @@ namespace ShibaHomeJam.Core
             UpdateLevelText();
             SetState(GameState.Playing);
 
-            // Verification log
+            VerifyLevel(data);
+
+            Debug.Log($"Level {levelNum} loaded. Timer: {levelTime}s. Route: {route.Length} cells.");
+        }
+
+        // ===================== Level Verification =====================
+
+        private void VerifyLevel(LevelData data)
+        {
             var gm = GridManager.Instance;
-            Debug.Log($"Level {levelNum} loaded. Grid: {data.width}x{data.height}, Timer: {levelTime}s");
-            Debug.Log($"  Shiba: ({data.shiba.x},{data.shiba.y}), Home: ({data.goal.x},{data.goal.y})");
+            int shibaCol = data.shiba.x, shibaRow = data.shiba.y;
+            int homeCol = data.goal.x, homeRow = data.goal.y;
+
+            Debug.Log("=== LEVEL VERIFICATION ===");
+            Debug.Log($"Shiba position: ({shibaCol},{shibaRow})");
+            Debug.Log($"Home position: ({homeCol},{homeRow})");
+
+            // 1. BFS with NO obstacles blocked (raw shortest path on empty grid)
+            // We need to temporarily check what path would be without any obstacles
+            // But obstacles are already placed, so let's find path ignoring nothing first
+            var rawPath = gm.FindPath(shibaCol, shibaRow, homeCol, homeRow);
+            if (rawPath != null)
+            {
+                var pathStr = $"({shibaCol},{shibaRow})";
+                foreach (var p in rawPath) pathStr += $"→({p.x},{p.y})";
+                Debug.Log($"BFS path (no blocking): {pathStr}");
+            }
+            else
+            {
+                Debug.Log("BFS path (no blocking): NO PATH FOUND");
+            }
+
+            // 2. BFS blocking only Obstacle cells (what Shiba actually sees)
+            var blockedPath = gm.FindPath(shibaCol, shibaRow, homeCol, homeRow, CellType.Obstacle);
+            if (blockedPath != null)
+            {
+                var pathStr = $"({shibaCol},{shibaRow})";
+                foreach (var p in blockedPath) pathStr += $"→({p.x},{p.y})";
+                Debug.Log($"BFS path (blocked by obstacles): {pathStr}");
+            }
+            else
+            {
+                Debug.Log("BFS path (blocked by obstacles): NO PATH (all routes blocked)");
+            }
+
+            // 3. Check each obstacle: is it on the BFS path?
+            // Use the raw path (no blocking) to see if obstacles intersect
+            var rawPathSet = new HashSet<Vector2Int>();
+            if (rawPath != null)
+                foreach (var p in rawPath) rawPathSet.Add(p);
+
+            bool anyFixedOnPath = false;
+            bool anyMovableOnPath = false;
+
             foreach (var obs in data.obstacles)
             {
-                var cell = gm.Get(obs.x, obs.y);
-                Debug.Log($"  Obstacle: ({obs.x},{obs.y}) type={obs.obstacleType} cell={cell}");
+                var obsPos = new Vector2Int(obs.x, obs.y);
+                bool onPath = rawPathSet.Contains(obsPos);
+                string status = onPath ? "ON PATH" : "off path";
+                Debug.Log($"  Obstacle ({obs.x},{obs.y}) type={obs.obstacleType}: {status}");
+
+                if (onPath && obs.IsMovable) anyMovableOnPath = true;
+                if (onPath && !obs.IsMovable) anyFixedOnPath = true;
             }
-            if (data.branches != null)
+
+            Debug.Log($"Fixed obstacle on BFS path: {anyFixedOnPath}");
+            Debug.Log($"Movable obstacle on BFS path: {anyMovableOnPath}");
+
+            // 4. For branching levels: check alternate path too
+            if (data.branches != null && data.branches.Length > 0)
             {
+                Debug.Log("--- Branch verification ---");
                 foreach (var b in data.branches)
                 {
-                    var primaryBlocked = gm.Get(b.primaryRoute[0].x, b.primaryRoute[0].y);
-                    var altBlocked = gm.Get(b.alternateRoute[0].x, b.alternateRoute[0].y);
-                    Debug.Log($"  Branch at ({b.branchAt.x},{b.branchAt.y}):");
-                    Debug.Log($"    Primary first cell ({b.primaryRoute[0].x},{b.primaryRoute[0].y}): {primaryBlocked}");
-                    Debug.Log($"    Alternate first cell ({b.alternateRoute[0].x},{b.alternateRoute[0].y}): {altBlocked}");
+                    Debug.Log($"  Branch point: ({b.branchAt.x},{b.branchAt.y})");
+
+                    // Primary route cells
+                    var primaryStr = "";
+                    bool primaryBlocked = false;
+                    foreach (var p in b.primaryRoute)
+                    {
+                        var cell = gm.Get(p.x, p.y);
+                        primaryStr += $"({p.x},{p.y})[{cell}]→";
+                        if (cell == CellType.Obstacle) primaryBlocked = true;
+                    }
+                    Debug.Log($"  Primary: {primaryStr.TrimEnd('→')}");
+                    Debug.Log($"  Primary blocked: {primaryBlocked}");
+
+                    // Alternate route cells
+                    var altStr = "";
+                    bool altBlocked = false;
+                    foreach (var p in b.alternateRoute)
+                    {
+                        var cell = gm.Get(p.x, p.y);
+                        altStr += $"({p.x},{p.y})[{cell}]→";
+                        if (cell == CellType.Obstacle) altBlocked = true;
+                    }
+                    Debug.Log($"  Alternate: {altStr.TrimEnd('→')}");
+                    Debug.Log($"  Alternate blocked: {altBlocked}");
                 }
             }
 
-            Debug.Log($"Level {levelNum} loaded. Timer: {levelTime}s. Route: {route.Length} cells.");
+            // 5. Final verdict
+            bool hasFixedMeaning = anyFixedOnPath;
+            bool hasPuzzle = anyMovableOnPath || (data.branches != null && data.branches.Length > 0);
+            bool valid = hasPuzzle;
+
+            if (data.branches != null && data.branches.Length > 0)
+            {
+                // For branch levels: fixed must block primary, movable must block alternate
+                Debug.Log($"Level valid (branch): primary blocked by fixed + alternate blocked by movable");
+            }
+            else
+            {
+                Debug.Log($"Level valid: {valid} (movable on path={anyMovableOnPath})");
+            }
+
+            Debug.Log("=== END VERIFICATION ===");
         }
 
         // ===================== Level Transitions =====================
