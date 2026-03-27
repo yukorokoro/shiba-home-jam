@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
@@ -22,22 +23,26 @@ namespace ShibaHomeJam.Core
         public int HomeCol { get; private set; }
         public int HomeRow { get; private set; }
         public float TimeRemaining { get; private set; }
+        public int CurrentLevel { get; private set; } = 1;
 
         public event System.Action<GameState> OnStateChanged;
-        public event System.Action<float> OnTimerUpdated;
 
         private List<ObstacleController> obstacles = new List<ObstacleController>();
         private List<GameObject> allSpawned = new List<GameObject>();
 
         // Timer
-        private float levelTime = 30f;
+        private float levelTime;
         private float timerLogInterval = 5f;
         private float timerLogTimer;
 
-        // Timer UI (created at runtime)
+        // UI elements (runtime-created)
+        private Canvas uiCanvas;
         private Text timerText;
-        private Canvas timerCanvas;
-        private Coroutine pulseCoroutine;
+        private Text levelText;
+        private GameObject gameOverPanel;
+        private GameObject clearPanel;
+        private GameObject completePanel;
+        private Button restartButton;
 
         // Input state
         private ObstacleController selectedObs;
@@ -52,19 +57,17 @@ namespace ShibaHomeJam.Core
 
         private void Start()
         {
-            LoadLevel();
+            CreateUI();
+            LoadLevel(CurrentLevel);
         }
 
         private void Update()
         {
             if (State != GameState.Playing) return;
 
-            // Countdown timer
             TimeRemaining -= Time.deltaTime;
-            OnTimerUpdated?.Invoke(TimeRemaining);
             UpdateTimerUI();
 
-            // Log timer every 5 seconds
             timerLogTimer -= Time.deltaTime;
             if (timerLogTimer <= 0f)
             {
@@ -76,7 +79,7 @@ namespace ShibaHomeJam.Core
             {
                 TimeRemaining = 0f;
                 Debug.Log("Time's Up! Game Over");
-                Shiba.Stop();
+                if (Shiba != null) Shiba.Stop();
                 SetState(GameState.GameOver);
                 return;
             }
@@ -84,87 +87,234 @@ namespace ShibaHomeJam.Core
             HandleInput();
         }
 
-        // ===================== Level Setup =====================
+        // ===================== Level Loading (data-driven) =====================
 
-        private void LoadLevel()
+        public void LoadLevel(int levelNum)
         {
             ClearAll();
+            CurrentLevel = levelNum;
 
-            int cols = 6, rows = 6;
-            GridManager.Instance.Init(cols, rows);
+            var data = LevelLoader.LoadLevel(levelNum);
+            if (data == null)
+            {
+                Debug.LogError($"Level {levelNum} not found!");
+                return;
+            }
 
-            // Home at (5,2)
-            HomeCol = 5;
-            HomeRow = 2;
+            GridManager.Instance.Init(data.width, data.height);
+
+            // Home
+            HomeCol = data.goal.x;
+            HomeRow = data.goal.y;
             GridManager.Instance.Set(HomeCol, HomeRow, CellType.Home);
             SpawnHome(HomeCol, HomeRow);
 
-            SpawnFloor(cols, rows);
+            SpawnFloor(data.width, data.height);
 
-            // Define Shiba's fixed route: straight line on row 2
-            var route = new Vector2Int[] {
-                new Vector2Int(0, 2),
-                new Vector2Int(1, 2),
-                new Vector2Int(2, 2),
-                new Vector2Int(3, 2),
-                new Vector2Int(4, 2),
-                new Vector2Int(5, 2)
-            };
+            // Route
+            var route = new Vector2Int[data.route.Length];
+            for (int i = 0; i < data.route.Length; i++)
+                route[i] = new Vector2Int(data.route[i].x, data.route[i].y);
 
-            // Draw route visuals (before spawning Shiba/obstacles so they render on top)
             SpawnRouteMarkers(route);
 
-            // Shiba at (0,2) with fixed route
-            Shiba = SpawnShiba(0, 2, route);
-            Shiba.OnReachedHome += () => SetState(GameState.Clear);
+            // Shiba
+            Shiba = SpawnShiba(data.shiba.x, data.shiba.y, route);
+            Shiba.OnReachedHome += OnLevelClear;
 
-            // Movable box at (2,2) — blocks the route
-            SpawnObstacle(2, 2, true);
+            // Obstacles
+            foreach (var obs in data.obstacles)
+                SpawnObstacle(obs.x, obs.y, obs.IsMovable);
 
             // Timer
+            levelTime = data.timeLimit > 0 ? data.timeLimit : 30f;
             TimeRemaining = levelTime;
             timerLogTimer = 0f;
-            CreateTimerUI();
 
-            FitCamera(cols, rows);
+            FitCamera(data.width, data.height);
+            HideAllPanels();
+            UpdateLevelText();
             SetState(GameState.Playing);
 
-            Debug.Log($"Level 1: Route (0,2)→(5,2), Box at (2,2). Timer: {levelTime}s.");
+            Debug.Log($"Level {levelNum} loaded. Timer: {levelTime}s. Route: {route.Length} cells.");
         }
 
-        // ===================== Timer UI =====================
+        // ===================== Level Transitions =====================
 
-        private void CreateTimerUI()
+        private void OnLevelClear()
         {
-            // Create a canvas for the timer
-            var canvasObj = new GameObject("TimerCanvas");
-            timerCanvas = canvasObj.AddComponent<Canvas>();
-            timerCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            timerCanvas.sortingOrder = 100;
-            canvasObj.AddComponent<CanvasScaler>();
+            SetState(GameState.Clear);
+
+            // Check if next level exists
+            var nextData = LevelLoader.LoadLevel(CurrentLevel + 1);
+            if (nextData != null)
+            {
+                clearPanel.SetActive(true);
+                StartCoroutine(AutoNextLevel());
+            }
+            else
+            {
+                completePanel.SetActive(true);
+                Debug.Log("All Levels Complete!");
+            }
+        }
+
+        private IEnumerator AutoNextLevel()
+        {
+            yield return new WaitForSeconds(2f);
+            if (clearPanel != null) clearPanel.SetActive(false);
+            LoadLevel(CurrentLevel + 1);
+        }
+
+        private void RetryLevel()
+        {
+            Debug.Log($"Retrying Level {CurrentLevel}");
+            LoadLevel(CurrentLevel);
+        }
+
+        private void GoHome()
+        {
+            SceneManager.LoadScene("Home");
+        }
+
+        // ===================== UI Creation =====================
+
+        private void CreateUI()
+        {
+            var canvasObj = new GameObject("GameUI_Canvas");
+            uiCanvas = canvasObj.AddComponent<Canvas>();
+            uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            uiCanvas.sortingOrder = 100;
+            var scaler = canvasObj.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080, 1920);
             canvasObj.AddComponent<GraphicRaycaster>();
-            allSpawned.Add(canvasObj);
 
-            // Timer text — top center, large
-            var textObj = new GameObject("TimerText");
-            textObj.transform.SetParent(canvasObj.transform, false);
-            timerText = textObj.AddComponent<Text>();
-            timerText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            timerText.fontSize = 64;
-            timerText.alignment = TextAnchor.MiddleCenter;
-            timerText.color = Color.white;
-            timerText.text = $"{Mathf.CeilToInt(levelTime)}s";
+            // Timer text — top center
+            timerText = CreateText(canvasObj.transform, "TimerText", "30s", 64,
+                new Vector2(0.3f, 0.9f), new Vector2(0.7f, 0.98f));
+            timerText.gameObject.AddComponent<Outline>().effectColor = Color.black;
 
-            // Add outline for readability
-            var outline = textObj.AddComponent<Outline>();
-            outline.effectColor = Color.black;
-            outline.effectDistance = new Vector2(2, -2);
+            // Level text — top left
+            levelText = CreateText(canvasObj.transform, "LevelText", "Level 1", 36,
+                new Vector2(0.02f, 0.9f), new Vector2(0.25f, 0.96f));
+            levelText.alignment = TextAnchor.MiddleLeft;
 
-            var rect = textObj.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.3f, 0.88f);
-            rect.anchorMax = new Vector2(0.7f, 0.98f);
+            // Restart button — top left below level text
+            restartButton = CreateButton(canvasObj.transform, "RestartBtn", "↺",
+                new Vector2(0.02f, 0.83f), new Vector2(0.1f, 0.9f),
+                new Color(0.5f, 0.5f, 0.5f), 36);
+            restartButton.onClick.AddListener(RetryLevel);
+
+            // Game Over panel
+            gameOverPanel = CreateOverlayPanel(canvasObj.transform, "GameOverPanel",
+                "Time's Up!", new Color(0.8f, 0.15f, 0.15f));
+            var retryBtn = CreateButton(gameOverPanel.transform, "RetryBtn", "Retry",
+                new Vector2(0.2f, 0.3f), new Vector2(0.48f, 0.4f),
+                new Color(0.9f, 0.5f, 0.2f), 42);
+            retryBtn.onClick.AddListener(RetryLevel);
+            var homeBtn = CreateButton(gameOverPanel.transform, "HomeBtn", "Home",
+                new Vector2(0.52f, 0.3f), new Vector2(0.8f, 0.4f),
+                new Color(0.4f, 0.4f, 0.6f), 42);
+            homeBtn.onClick.AddListener(GoHome);
+            gameOverPanel.SetActive(false);
+
+            // Clear panel
+            clearPanel = CreateOverlayPanel(canvasObj.transform, "ClearPanel",
+                "Level Clear!", new Color(0.2f, 0.7f, 0.3f));
+            clearPanel.SetActive(false);
+
+            // All Complete panel
+            completePanel = CreateOverlayPanel(canvasObj.transform, "CompletePanel",
+                "All Levels Complete!", new Color(1f, 0.8f, 0.2f));
+            var completeHomeBtn = CreateButton(completePanel.transform, "HomeBtn", "Home",
+                new Vector2(0.3f, 0.3f), new Vector2(0.7f, 0.4f),
+                new Color(0.3f, 0.5f, 0.95f), 42);
+            completeHomeBtn.onClick.AddListener(GoHome);
+            completePanel.SetActive(false);
+        }
+
+        private Text CreateText(Transform parent, string name, string content, int fontSize,
+            Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var obj = new GameObject(name);
+            obj.transform.SetParent(parent, false);
+            var text = obj.AddComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = fontSize;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.text = content;
+            var rect = obj.GetComponent<RectTransform>();
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
+            return text;
+        }
+
+        private Button CreateButton(Transform parent, string name, string label,
+            Vector2 anchorMin, Vector2 anchorMax, Color bgColor, int fontSize)
+        {
+            var obj = new GameObject(name);
+            obj.transform.SetParent(parent, false);
+            var img = obj.AddComponent<Image>();
+            img.color = bgColor;
+            var btn = obj.AddComponent<Button>();
+            var rect = obj.GetComponent<RectTransform>();
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+
+            var txtObj = new GameObject("Text");
+            txtObj.transform.SetParent(obj.transform, false);
+            var txt = txtObj.AddComponent<Text>();
+            txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            txt.fontSize = fontSize;
+            txt.alignment = TextAnchor.MiddleCenter;
+            txt.color = Color.white;
+            txt.text = label;
+            var txtRect = txtObj.GetComponent<RectTransform>();
+            txtRect.anchorMin = Vector2.zero;
+            txtRect.anchorMax = Vector2.one;
+            txtRect.offsetMin = Vector2.zero;
+            txtRect.offsetMax = Vector2.zero;
+
+            return btn;
+        }
+
+        private GameObject CreateOverlayPanel(Transform parent, string name,
+            string message, Color messageColor)
+        {
+            var panel = new GameObject(name);
+            panel.transform.SetParent(parent, false);
+            var panelImg = panel.AddComponent<Image>();
+            panelImg.color = new Color(0, 0, 0, 0.7f);
+            var panelRect = panel.GetComponent<RectTransform>();
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+
+            var text = CreateText(panel.transform, "Message", message, 64,
+                new Vector2(0.1f, 0.5f), new Vector2(0.9f, 0.7f));
+            text.color = messageColor;
+
+            return panel;
+        }
+
+        private void HideAllPanels()
+        {
+            if (gameOverPanel != null) gameOverPanel.SetActive(false);
+            if (clearPanel != null) clearPanel.SetActive(false);
+            if (completePanel != null) completePanel.SetActive(false);
+        }
+
+        private void UpdateLevelText()
+        {
+            if (levelText != null)
+                levelText.text = $"Level {CurrentLevel}";
         }
 
         private void UpdateTimerUI()
@@ -176,14 +326,12 @@ namespace ShibaHomeJam.Core
 
             if (TimeRemaining <= 5f)
             {
-                // Pulse animation when 5 seconds left
                 timerText.color = Color.red;
                 float pulse = 1f + 0.15f * Mathf.Sin(Time.time * 8f);
                 timerText.transform.localScale = Vector3.one * pulse;
             }
             else if (TimeRemaining <= 10f)
             {
-                // Red when 10 seconds left
                 timerText.color = Color.red;
                 timerText.transform.localScale = Vector3.one;
             }
@@ -192,6 +340,17 @@ namespace ShibaHomeJam.Core
                 timerText.color = Color.white;
                 timerText.transform.localScale = Vector3.one;
             }
+        }
+
+        // ===================== State =====================
+
+        private void SetState(GameState s)
+        {
+            State = s;
+            OnStateChanged?.Invoke(s);
+
+            if (s == GameState.GameOver)
+                gameOverPanel.SetActive(true);
         }
 
         // ===================== Input =====================
@@ -245,15 +404,8 @@ namespace ShibaHomeJam.Core
 
                     if (dc != 0 || dr != 0)
                     {
-                        Debug.Log($"Swipe direction: dc={dc} dr={dr}");
                         if (selectedObs.TrySlide(dc, dr))
-                        {
                             selectedObs.OnSlideComplete += OnObstacleSlideComplete;
-                        }
-                    }
-                    else
-                    {
-                        Debug.Log("Swipe too short, try dragging further");
                     }
                 }
                 selectedObs = null;
@@ -283,14 +435,6 @@ namespace ShibaHomeJam.Core
 
             if (Shiba != null && Shiba.Alive && !Shiba.Arrived)
                 Shiba.RecalculatePath();
-        }
-
-        // ===================== State =====================
-
-        private void SetState(GameState s)
-        {
-            State = s;
-            OnStateChanged?.Invoke(s);
         }
 
         // ===================== Camera =====================
@@ -331,16 +475,14 @@ namespace ShibaHomeJam.Core
             {
                 var pos = route[i];
 
-                // Small dot marker on the route
                 var marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 marker.name = $"Route_{i}";
                 marker.transform.position = gm.ToWorld(pos.x, pos.y) + Vector3.down * 0.45f;
                 marker.transform.localScale = new Vector3(0.3f, 0.02f, 0.3f);
-                marker.GetComponent<Renderer>().material.color = new Color(1f, 0.75f, 0.3f, 0.8f); // warm orange dot
+                marker.GetComponent<Renderer>().material.color = new Color(1f, 0.75f, 0.3f, 0.8f);
                 Destroy(marker.GetComponent<Collider>());
                 allSpawned.Add(marker);
 
-                // Arrow between cells (small elongated quad pointing to next cell)
                 if (i < route.Length - 1)
                 {
                     var next = route[i + 1];
@@ -352,9 +494,7 @@ namespace ShibaHomeJam.Core
                     arrow.transform.position = new Vector3(mx, -0.44f, mz);
                     arrow.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
-                    // Stretch in the direction of movement
                     int dx = next.x - pos.x;
-                    int dy = next.y - pos.y;
                     if (dx != 0)
                         arrow.transform.localScale = new Vector3(0.4f, 0.15f, 1f);
                     else
