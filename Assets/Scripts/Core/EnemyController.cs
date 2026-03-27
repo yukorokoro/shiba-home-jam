@@ -13,7 +13,7 @@ namespace ShibaHomeJam.Core
         public event Action OnCaughtShiba;
         public event Action<int> OnProximityChanged; // fires with Manhattan distance to Shiba
 
-        private float moveInterval = 2.5f;
+        private float moveInterval = 1.2f;
         private float moveTimer;
         private float recalcInterval = 0.5f;
         private float recalcTimer;
