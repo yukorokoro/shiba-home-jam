@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -20,12 +21,23 @@ namespace ShibaHomeJam.Core
         public ShibaController Shiba { get; private set; }
         public int HomeCol { get; private set; }
         public int HomeRow { get; private set; }
+        public float TimeRemaining { get; private set; }
 
         public event System.Action<GameState> OnStateChanged;
+        public event System.Action<float> OnTimerUpdated;
 
         private List<ObstacleController> obstacles = new List<ObstacleController>();
-        private List<EnemyController> enemies = new List<EnemyController>();
         private List<GameObject> allSpawned = new List<GameObject>();
+
+        // Timer
+        private float levelTime = 30f;
+        private float timerLogInterval = 5f;
+        private float timerLogTimer;
+
+        // Timer UI (created at runtime)
+        private Text timerText;
+        private Canvas timerCanvas;
+        private Coroutine pulseCoroutine;
 
         // Input state
         private ObstacleController selectedObs;
@@ -46,6 +58,29 @@ namespace ShibaHomeJam.Core
         private void Update()
         {
             if (State != GameState.Playing) return;
+
+            // Countdown timer
+            TimeRemaining -= Time.deltaTime;
+            OnTimerUpdated?.Invoke(TimeRemaining);
+            UpdateTimerUI();
+
+            // Log timer every 5 seconds
+            timerLogTimer -= Time.deltaTime;
+            if (timerLogTimer <= 0f)
+            {
+                timerLogTimer = timerLogInterval;
+                Debug.Log($"Timer: {Mathf.CeilToInt(TimeRemaining)} seconds remaining");
+            }
+
+            if (TimeRemaining <= 0f)
+            {
+                TimeRemaining = 0f;
+                Debug.Log("Time's Up! Game Over");
+                Shiba.Stop();
+                SetState(GameState.GameOver);
+                return;
+            }
+
             HandleInput();
         }
 
@@ -58,54 +93,114 @@ namespace ShibaHomeJam.Core
             int cols = 6, rows = 6;
             GridManager.Instance.Init(cols, rows);
 
-            // Home at (5,2) — right middle
+            // Home at (5,2)
             HomeCol = 5;
             HomeRow = 2;
             GridManager.Instance.Set(HomeCol, HomeRow, CellType.Home);
             SpawnHome(HomeCol, HomeRow);
 
-            // Floor
             SpawnFloor(cols, rows);
 
-            // Shiba at (0,2) — left middle, same row as Home
+            // Shiba at (0,2)
             Shiba = SpawnShiba(0, 2);
             Shiba.OnReachedHome += () => SetState(GameState.Clear);
-            Shiba.OnCaught += () => SetState(GameState.GameOver);
 
-            // Movable box at (2,2) — directly between Shiba and Home on row 2
+            // Movable box at (2,2) — blocks direct path
             SpawnObstacle(2, 2, true);
 
-            // Enemy at (5,0) — top right, approaches from above
-            SpawnEnemy(5, 0);
+            // No enemy
+
+            // Timer
+            TimeRemaining = levelTime;
+            timerLogTimer = 0f; // log immediately
+            CreateTimerUI();
 
             FitCamera(cols, rows);
             SetState(GameState.Playing);
 
-            // Verify pathfinding at start
+            // Verify pathfinding
             var gm = GridManager.Instance;
-            var path = gm.FindPath(0, 2, HomeCol, HomeRow);
+            var path = gm.FindPath(0, 2, HomeCol, HomeRow, CellType.Obstacle);
             if (path != null)
             {
-                var steps = new System.Text.StringBuilder("Shiba path at start: (0,2)→");
+                var steps = new System.Text.StringBuilder("Shiba path: (0,2)→");
                 foreach (var p in path) steps.Append($"({p.x},{p.y})→");
-                var pathStr = steps.ToString().TrimEnd('→');
-                Debug.Log(pathStr);
-                Debug.Log($"Path length: {path.Count} steps (direct would be 5). Box at (2,2) forces detour.");
+                Debug.Log(steps.ToString().TrimEnd('→'));
             }
             else
             {
-                Debug.Log("Shiba: no path found at start, waiting for player");
+                Debug.Log("Shiba: path blocked by box at (2,2). Slide it to open the way!");
             }
 
-            Debug.Log("Level 1: Shiba(0,2) Home(5,2) Box(2,2) Enemy(5,0)");
-            Debug.Log("Slide box DOWN to open row 2, then RIGHT to block enemy!");
+            Debug.Log($"Level 1: Shiba(0,2) Home(5,2) Box(2,2). Timer: {levelTime}s. No enemy.");
+        }
+
+        // ===================== Timer UI =====================
+
+        private void CreateTimerUI()
+        {
+            // Create a canvas for the timer
+            var canvasObj = new GameObject("TimerCanvas");
+            timerCanvas = canvasObj.AddComponent<Canvas>();
+            timerCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            timerCanvas.sortingOrder = 100;
+            canvasObj.AddComponent<CanvasScaler>();
+            canvasObj.AddComponent<GraphicRaycaster>();
+            allSpawned.Add(canvasObj);
+
+            // Timer text — top center, large
+            var textObj = new GameObject("TimerText");
+            textObj.transform.SetParent(canvasObj.transform, false);
+            timerText = textObj.AddComponent<Text>();
+            timerText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            timerText.fontSize = 64;
+            timerText.alignment = TextAnchor.MiddleCenter;
+            timerText.color = Color.white;
+            timerText.text = $"{Mathf.CeilToInt(levelTime)}s";
+
+            // Add outline for readability
+            var outline = textObj.AddComponent<Outline>();
+            outline.effectColor = Color.black;
+            outline.effectDistance = new Vector2(2, -2);
+
+            var rect = textObj.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.3f, 0.88f);
+            rect.anchorMax = new Vector2(0.7f, 0.98f);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+        }
+
+        private void UpdateTimerUI()
+        {
+            if (timerText == null) return;
+
+            int seconds = Mathf.CeilToInt(TimeRemaining);
+            timerText.text = $"{seconds}s";
+
+            if (TimeRemaining <= 5f)
+            {
+                // Pulse animation when 5 seconds left
+                timerText.color = Color.red;
+                float pulse = 1f + 0.15f * Mathf.Sin(Time.time * 8f);
+                timerText.transform.localScale = Vector3.one * pulse;
+            }
+            else if (TimeRemaining <= 10f)
+            {
+                // Red when 10 seconds left
+                timerText.color = Color.red;
+                timerText.transform.localScale = Vector3.one;
+            }
+            else
+            {
+                timerText.color = Color.white;
+                timerText.transform.localScale = Vector3.one;
+            }
         }
 
         // ===================== Input =====================
 
         private void HandleInput()
         {
-            // Read pointer state from either mouse or touch
             bool pressedThisFrame = false;
             bool releasedThisFrame = false;
             Vector2 pointerPos = Vector2.zero;
@@ -118,7 +213,6 @@ namespace ShibaHomeJam.Core
                 if (mouse.leftButton.wasReleasedThisFrame) releasedThisFrame = true;
             }
 
-            // Touch overrides mouse if active
             var touch = Touchscreen.current;
             if (touch != null && touch.primaryTouch.press.isPressed)
             {
@@ -149,7 +243,7 @@ namespace ShibaHomeJam.Core
                         if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
                             dc = delta.x > 0 ? 1 : -1;
                         else
-                            dr = delta.y > 0 ? -1 : 1; // screen up = row decrease
+                            dr = delta.y > 0 ? -1 : 1;
                     }
 
                     if (dc != 0 || dr != 0)
@@ -169,16 +263,11 @@ namespace ShibaHomeJam.Core
             }
         }
 
-        /// <summary>
-        /// Convert screen position to grid cell and find movable obstacle there.
-        /// Much more reliable than Physics.Raycast for top-down orthographic cameras.
-        /// </summary>
         private ObstacleController FindObstacleAtScreen(Vector2 screenPos)
         {
             var cam = Camera.main;
             if (cam == null) return null;
 
-            // Orthographic camera: ScreenToWorldPoint gives world XZ directly
             var worldPos = cam.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 0f));
             var (col, row) = GridManager.Instance.ToGrid(worldPos);
 
@@ -195,12 +284,8 @@ namespace ShibaHomeJam.Core
             foreach (var obs in obstacles)
                 obs.OnSlideComplete -= OnObstacleSlideComplete;
 
-            // Both Shiba and Enemy recalculate paths after obstacle moves
             if (Shiba != null && Shiba.Alive && !Shiba.Arrived)
                 Shiba.RecalculatePath();
-
-            foreach (var enemy in enemies)
-                enemy.RecalculatePath();
         }
 
         // ===================== State =====================
@@ -250,7 +335,7 @@ namespace ShibaHomeJam.Core
                 obj.name = $"Box({col},{row})";
                 obj.transform.localScale = Vector3.one * 0.8f;
                 obj.GetComponent<Renderer>().material.color = new Color(0.6f, 0.55f, 0.4f);
-                Destroy(obj.GetComponent<Collider>()); // not using physics raycast anymore
+                Destroy(obj.GetComponent<Collider>());
                 var oc = obj.AddComponent<ObstacleController>();
                 oc.Init(col, row, true);
                 obstacles.Add(oc);
@@ -268,75 +353,6 @@ namespace ShibaHomeJam.Core
                 obstacles.Add(oc);
                 allSpawned.Add(obj);
             }
-        }
-
-        private void SpawnEnemy(int col, int row)
-        {
-            var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            obj.name = $"Enemy({col},{row})";
-            obj.transform.localScale = Vector3.one * 0.7f;
-            obj.GetComponent<Renderer>().material.color = new Color(1f, 0.5f, 0.1f);
-            Destroy(obj.GetComponent<Collider>());
-            var ec = obj.AddComponent<EnemyController>();
-            ec.Init(col, row);
-            ec.OnCaughtShiba += () => SetState(GameState.GameOver);
-            ec.OnProximityChanged += OnEnemyProximity;
-            enemies.Add(ec);
-            allSpawned.Add(obj);
-        }
-
-        // ===================== Tension Effects =====================
-
-        private Coroutine pulseCoroutine;
-
-        private void OnEnemyProximity(int distance)
-        {
-            if (State != GameState.Playing) return;
-
-            if (distance <= 1)
-            {
-                // Screen shake when 1 cell away
-                StartCoroutine(ScreenShake());
-            }
-            else if (distance <= 3)
-            {
-                // Red pulse when within 3 cells
-                if (pulseCoroutine == null)
-                    pulseCoroutine = StartCoroutine(RedPulse());
-            }
-        }
-
-        private IEnumerator RedPulse()
-        {
-            var cam = Camera.main;
-            if (cam == null) yield break;
-
-            Color original = cam.backgroundColor;
-            Color tinted = Color.Lerp(original, Color.red, 0.3f);
-
-            cam.backgroundColor = tinted;
-            yield return new WaitForSeconds(0.1f);
-            cam.backgroundColor = original;
-
-            pulseCoroutine = null;
-        }
-
-        private IEnumerator ScreenShake()
-        {
-            var cam = Camera.main;
-            if (cam == null) yield break;
-
-            Vector3 origin = cam.transform.position;
-            float t = 0f;
-            while (t < 0.15f)
-            {
-                t += Time.deltaTime;
-                float x = UnityEngine.Random.Range(-0.08f, 0.08f);
-                float z = UnityEngine.Random.Range(-0.08f, 0.08f);
-                cam.transform.position = origin + new Vector3(x, 0, z);
-                yield return null;
-            }
-            cam.transform.position = origin;
         }
 
         private void SpawnHome(int col, int row)
@@ -393,7 +409,6 @@ namespace ShibaHomeJam.Core
                 if (obj != null) Destroy(obj);
             allSpawned.Clear();
             obstacles.Clear();
-            enemies.Clear();
             Shiba = null;
         }
     }

@@ -13,6 +13,7 @@ namespace ShibaHomeJam.Core
         public Position goal;
         public ObstacleData[] obstacles;
         public EnemyData[] enemies;
+        public int timeLimit; // seconds, 0 = no limit
     }
 
     [Serializable]
