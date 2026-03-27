@@ -165,6 +165,27 @@ namespace ShibaHomeJam.Core
             UpdateLevelText();
             SetState(GameState.Playing);
 
+            // Verification log
+            var gm = GridManager.Instance;
+            Debug.Log($"Level {levelNum} loaded. Grid: {data.width}x{data.height}, Timer: {levelTime}s");
+            Debug.Log($"  Shiba: ({data.shiba.x},{data.shiba.y}), Home: ({data.goal.x},{data.goal.y})");
+            foreach (var obs in data.obstacles)
+            {
+                var cell = gm.Get(obs.x, obs.y);
+                Debug.Log($"  Obstacle: ({obs.x},{obs.y}) type={obs.obstacleType} cell={cell}");
+            }
+            if (data.branches != null)
+            {
+                foreach (var b in data.branches)
+                {
+                    var primaryBlocked = gm.Get(b.primaryRoute[0].x, b.primaryRoute[0].y);
+                    var altBlocked = gm.Get(b.alternateRoute[0].x, b.alternateRoute[0].y);
+                    Debug.Log($"  Branch at ({b.branchAt.x},{b.branchAt.y}):");
+                    Debug.Log($"    Primary first cell ({b.primaryRoute[0].x},{b.primaryRoute[0].y}): {primaryBlocked}");
+                    Debug.Log($"    Alternate first cell ({b.alternateRoute[0].x},{b.alternateRoute[0].y}): {altBlocked}");
+                }
+            }
+
             Debug.Log($"Level {levelNum} loaded. Timer: {levelTime}s. Route: {route.Length} cells.");
         }
 
