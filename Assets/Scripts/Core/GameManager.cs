@@ -101,38 +101,35 @@ namespace ShibaHomeJam.Core
 
             SpawnFloor(cols, rows);
 
-            // Shiba at (0,2)
-            Shiba = SpawnShiba(0, 2);
+            // Define Shiba's fixed route: straight line on row 2
+            var route = new Vector2Int[] {
+                new Vector2Int(0, 2),
+                new Vector2Int(1, 2),
+                new Vector2Int(2, 2),
+                new Vector2Int(3, 2),
+                new Vector2Int(4, 2),
+                new Vector2Int(5, 2)
+            };
+
+            // Draw route visuals (before spawning Shiba/obstacles so they render on top)
+            SpawnRouteMarkers(route);
+
+            // Shiba at (0,2) with fixed route
+            Shiba = SpawnShiba(0, 2, route);
             Shiba.OnReachedHome += () => SetState(GameState.Clear);
 
-            // Movable box at (2,2) — blocks direct path
+            // Movable box at (2,2) — blocks the route
             SpawnObstacle(2, 2, true);
-
-            // No enemy
 
             // Timer
             TimeRemaining = levelTime;
-            timerLogTimer = 0f; // log immediately
+            timerLogTimer = 0f;
             CreateTimerUI();
 
             FitCamera(cols, rows);
             SetState(GameState.Playing);
 
-            // Verify pathfinding
-            var gm = GridManager.Instance;
-            var path = gm.FindPath(0, 2, HomeCol, HomeRow, CellType.Obstacle);
-            if (path != null)
-            {
-                var steps = new System.Text.StringBuilder("Shiba path: (0,2)→");
-                foreach (var p in path) steps.Append($"({p.x},{p.y})→");
-                Debug.Log(steps.ToString().TrimEnd('→'));
-            }
-            else
-            {
-                Debug.Log("Shiba: path blocked by box at (2,2). Slide it to open the way!");
-            }
-
-            Debug.Log($"Level 1: Shiba(0,2) Home(5,2) Box(2,2). Timer: {levelTime}s. No enemy.");
+            Debug.Log($"Level 1: Route (0,2)→(5,2), Box at (2,2). Timer: {levelTime}s.");
         }
 
         // ===================== Timer UI =====================
@@ -314,7 +311,7 @@ namespace ShibaHomeJam.Core
 
         // ===================== Spawning =====================
 
-        private ShibaController SpawnShiba(int col, int row)
+        private ShibaController SpawnShiba(int col, int row, Vector2Int[] route)
         {
             var obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             obj.name = "Shiba";
@@ -322,9 +319,52 @@ namespace ShibaHomeJam.Core
             obj.GetComponent<Renderer>().material.color = new Color(1f, 0.9f, 0.2f);
             Destroy(obj.GetComponent<Collider>());
             var sc = obj.AddComponent<ShibaController>();
-            sc.Init(col, row);
+            sc.Init(col, row, route);
             allSpawned.Add(obj);
             return sc;
+        }
+
+        private void SpawnRouteMarkers(Vector2Int[] route)
+        {
+            var gm = GridManager.Instance;
+            for (int i = 0; i < route.Length; i++)
+            {
+                var pos = route[i];
+
+                // Small dot marker on the route
+                var marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                marker.name = $"Route_{i}";
+                marker.transform.position = gm.ToWorld(pos.x, pos.y) + Vector3.down * 0.45f;
+                marker.transform.localScale = new Vector3(0.3f, 0.02f, 0.3f);
+                marker.GetComponent<Renderer>().material.color = new Color(1f, 0.75f, 0.3f, 0.8f); // warm orange dot
+                Destroy(marker.GetComponent<Collider>());
+                allSpawned.Add(marker);
+
+                // Arrow between cells (small elongated quad pointing to next cell)
+                if (i < route.Length - 1)
+                {
+                    var next = route[i + 1];
+                    var arrow = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    arrow.name = $"Arrow_{i}";
+
+                    float mx = (pos.x + next.x) * 0.5f;
+                    float mz = -(pos.y + next.y) * 0.5f;
+                    arrow.transform.position = new Vector3(mx, -0.44f, mz);
+                    arrow.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+
+                    // Stretch in the direction of movement
+                    int dx = next.x - pos.x;
+                    int dy = next.y - pos.y;
+                    if (dx != 0)
+                        arrow.transform.localScale = new Vector3(0.4f, 0.15f, 1f);
+                    else
+                        arrow.transform.localScale = new Vector3(0.15f, 0.4f, 1f);
+
+                    arrow.GetComponent<Renderer>().material.color = new Color(1f, 0.75f, 0.3f, 0.6f);
+                    Destroy(arrow.GetComponent<Collider>());
+                    allSpawned.Add(arrow);
+                }
+            }
         }
 
         private void SpawnObstacle(int col, int row, bool movable)

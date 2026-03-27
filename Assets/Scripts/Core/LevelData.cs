@@ -11,6 +11,7 @@ namespace ShibaHomeJam.Core
         public int height;
         public Position shiba;
         public Position goal;
+        public Position[] route; // ordered list of cells Shiba follows
         public ObstacleData[] obstacles;
         public EnemyData[] enemies;
         public int timeLimit; // seconds, 0 = no limit

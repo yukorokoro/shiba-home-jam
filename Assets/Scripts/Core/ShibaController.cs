@@ -4,6 +4,11 @@ using System.Collections;
 
 namespace ShibaHomeJam.Core
 {
+    /// <summary>
+    /// Shiba moves along a pre-defined route, one cell at a time.
+    /// If the next cell is blocked by an obstacle, Shiba waits.
+    /// Shiba CANNOT leave the route.
+    /// </summary>
     public class ShibaController : MonoBehaviour
     {
         public int Col { get; private set; }
@@ -13,20 +18,33 @@ namespace ShibaHomeJam.Core
 
         public event Action OnReachedHome;
 
+        private Vector2Int[] route;   // the fixed route cells in order
+        private int routeIndex;       // current position in route (next cell to move to)
+
         private float moveInterval = 1.5f;
         private float moveTimer;
         private float animSpeed = 5f;
         private bool animating;
 
-        public void Init(int col, int row)
+        /// <summary>
+        /// Initialize with starting position and the full route (including start).
+        /// </summary>
+        public void Init(int col, int row, Vector2Int[] routeCells)
         {
             Col = col;
             Row = row;
             Alive = true;
             Arrived = false;
+            route = routeCells;
+            routeIndex = 1; // index 0 is the starting cell, so next target is index 1
             moveTimer = moveInterval;
             transform.position = GridManager.Instance.ToWorld(col, row);
             GridManager.Instance.Set(col, row, CellType.Shiba);
+
+            // Log the route
+            var sb = new System.Text.StringBuilder("Shiba route: ");
+            foreach (var r in route) sb.Append($"({r.x},{r.y})→");
+            Debug.Log(sb.ToString().TrimEnd('→'));
         }
 
         private void Update()
@@ -41,41 +59,46 @@ namespace ShibaHomeJam.Core
             }
         }
 
+        /// <summary>
+        /// Called after an obstacle moves. Immediately tries to continue along route.
+        /// </summary>
         public void RecalculatePath()
         {
             if (!Alive || Arrived || animating) return;
-            Debug.Log("Shiba: path recalculated after obstacle move");
+            Debug.Log("Shiba: obstacle moved, checking route");
             moveTimer = moveInterval;
             TryStep();
         }
 
         private void TryStep()
         {
-            var gm = GridManager.Instance;
-            int homeC = GameManager.Instance.HomeCol;
-            int homeR = GameManager.Instance.HomeRow;
-
-            var path = gm.FindPath(Col, Row, homeC, homeR, CellType.Obstacle);
-
-            if (path == null || path.Count == 0)
+            if (route == null || routeIndex >= route.Length)
             {
-                Debug.Log("Shiba: path blocked, waiting");
+                Debug.Log("Shiba: route complete");
                 return;
             }
 
-            var next = path[0];
-            Debug.Log($"Shiba: path found, moving to ({next.x},{next.y})");
-            MoveTo(next.x, next.y, homeC, homeR);
-        }
-
-        private void MoveTo(int nc, int nr, int homeC, int homeR)
-        {
             var gm = GridManager.Instance;
-            gm.Clear(Col, Row);
-            Col = nc;
-            Row = nr;
+            var next = route[routeIndex];
 
-            if (Col == homeC && Row == homeR)
+            // Check if next route cell is blocked
+            var cell = gm.Get(next.x, next.y);
+            if (cell == CellType.Obstacle)
+            {
+                Debug.Log($"Shiba: route blocked at ({next.x},{next.y}), waiting");
+                return;
+            }
+
+            // Move to next route cell
+            gm.Clear(Col, Row);
+            Col = next.x;
+            Row = next.y;
+            routeIndex++;
+
+            Debug.Log($"Shiba: moving to ({Col},{Row}) [{routeIndex}/{route.Length}]");
+
+            // Check if this is the last cell (Home)
+            if (routeIndex >= route.Length)
             {
                 Arrived = true;
                 Debug.Log("LEVEL CLEAR");
