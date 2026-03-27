@@ -174,7 +174,7 @@ namespace ShibaHomeJam.Core
             if (Col == shiba.Col && Row == shiba.Row)
             {
                 gm.Set(Col, Row, CellType.Enemy);
-                shiba.Die();
+                shiba.Stop();
                 OnCaughtShiba?.Invoke();
                 StartCoroutine(MoveAndBounce(gm.ToWorld(Col, Row)));
                 return;
